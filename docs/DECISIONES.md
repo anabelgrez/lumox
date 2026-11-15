@@ -62,7 +62,7 @@ Documento del equipo Lunáticos para explicar (a nosotros mismos, al jurado y a 
 
 **Por qué:** es nuestra respuesta a "¿y si se atrasa?", que ninguno de los repos que relevamos contesta. Para la grilla reutilizamos la efeméride del centro: el error por paralaje es ≤ 9e-4° para la Tierra y lo declaramos en la traza.
 
-**Resultado que nos sorprendió y confirma la idea:** en el borde de Shackleton con mástil de 2 m hay Sol el 15,7 % del tiempo; con 3 m, 67 %; con 5 m, 95 %. Un metro de mástil cambia la misión.
+**Resultado que nos sorprendió y confirma la idea:** en el borde de Shackleton, misión del 24 de enero al 7 de febrero de 2027, con mástil de 2 m hay Sol el 15,7 % del tiempo; con 3 m, 67,1 %; con 5 m, 95,0 %. Un metro de mástil cambia la misión.
 
 ## 9. Sin DEM, horizonte plano **declarado**
 
@@ -78,23 +78,51 @@ Documento del equipo Lunáticos para explicar (a nosotros mismos, al jurado y a 
 
 **Por qué:** la calculadora acepta valores del usuario; pint rechaza metros donde van segundos. Y si alguien pregunta "¿de dónde sale 1361?", `constants.py` dice Kopp & Lean 2011.
 
-## 12. Front: React + Vite (el stack de la referencia), SVG para el panorama, Three.js para la escena 3D
+## 12. Front: React + Vite, SVG para 2D, Three.js para 3D
 
-**Elegimos:** mantener el stack del `lunar-navigator` (React 19 + Vite 7). Panorama 360° en SVG puro. Escena 3D con Three.js usando el parche real del DEM, el Sol como luz direccional en su posición real y sombras calculadas por la GPU.
+**Elegimos:** el stack del `lunar-navigator` (React 19 + Vite 7). El visor tiene dos modos con un botón: **2D** (panorama 360° del horizonte en SVG + mapa cenital del parche de terreno) y **3D** (Three.js). Cambiar de modo conserva sitio, fecha y hora.
 
-**Por qué el SVG:** el panorama es el gráfico que más mira un planificador; en SVG es nítido en un proyector y cada elemento es inspeccionable.
+**Por qué el SVG en 2D:** el panorama es lo que más mira un planificador; en SVG es nítido en un proyector, no necesita placa de video y cada elemento es inspeccionable.
 
-**Por qué Three.js ahora y no un globo 3D:** en la idea original descartamos el globo porque todos los equipos lo hacen y no responde ninguna pregunta. La escena local sí responde una: *¿cómo se ve el Sol rasante sobre este relieve a esta hora?* Las sombras no son decoración: salen de la misma dirección solar que usa el motor. No exageramos alturas.
+**Por qué Three.js y no un globo 3D:** en la idea original descartamos el globo porque todos los equipos lo hacen y no responde ninguna pregunta. La escena local sí responde una: *¿cómo se ve el Sol rasante sobre este relieve a esta hora?* Alternativas: CesiumJS (pensado para la Tierra, pesado para un parche lunar) y Babylon.js (equivalente, pero el equipo conoce más Three.js).
+
+**Cómo nos aseguramos de que el 3D diga lo mismo que el cálculo:**
+- El terreno es el parche del mismo DEM que usa el horizonte, reducido a 97 × 97 puntos (250 m) para que ande en cualquier compu, con la caída por curvatura ya aplicada por el backend. No exageramos alturas.
+- El Sol es una luz direccional en el vector que calculó el motor para esa hora, y su intensidad es la fracción de disco visible que también calculó el motor.
+- El parche cubre 24 km, pero el horizonte se calcula hasta 150 km. Para que no falte lo de más lejos, dibujamos un **anillo** con el perfil θ(azimut) del motor. Así, en la vista "desde el módulo" se ve el mismo horizonte que en el panorama 2D.
+- Límite que declaramos: las sombras que proyecta la GPU salen solo del parche de 24 km. Lo que tapa el Sol desde más lejos lo refleja la intensidad de la luz (que viene del cálculo), no una sombra dibujada.
+- Si el equipo no tiene WebGL, el botón 3D se desactiva y se muestra el 2D.
 
 ## 13. Lumo, inferencias y "en criollo"
 
-**Elegimos:** una mascota SVG original, inferencias por reglas fijas y traducciones a lenguaje coloquial por cada paso (`plain.js`). Sin modelo de lenguaje dentro de la app.
+**Elegimos:** una mascota SVG propia, inferencias por reglas fijas y traducciones a lenguaje coloquial por cada paso (`plain.js`), en español y en inglés. Un interruptor **Simple / Técnico** decide qué se ve primero: la frase o la fórmula con unidades e incertidumbre.
 
-**Por qué:** el desafío pide que sirva a docentes y público. Pero no queríamos un chatbot que invente: cada frase es una plantilla sobre un número calculado, y cada inferencia tiene un botón que lleva al paso de la traza del que sale.
+**Por qué:** el desafío pide que sirva a docentes y público. No queríamos un chatbot que invente: cada frase es una plantilla sobre un número calculado ("El Sol está apenas 0,40° sobre el horizonte y esa loma mide 0,53°: lo tapa"), y cada inferencia lleva al paso de la traza del que sale.
 
-## 14. Uso de IA
+**Animaciones:** cinco, una por concepto (horizonte, disco tapado, libración, batería, mástil/vecindario), de menos de 10 s, con pausa y respetando "reducir movimiento" del sistema. Son dibujos con valores de ejemplo y lo dicen; los números reales están en la traza.
 
-Escribimos este código con Claude (Anthropic) como asistente de programación, bajo nuestra dirección y a partir de nuestra especificación. Lo declaramos en el README. La aplicación en sí no usa IA. Decidimos no "disimular" esto: la validez de un cálculo se juzga por sus fuentes y sus pruebas, no por quién tipeó.
+## 14. La paleta de colores
+
+**Elegimos:** fondo azul noche casi negro, paneles un tono más claros, azul (#2f80ff) como acento de la interfaz, y tres reglas con significado:
+- **ámbar** = Sol (todo lo que es luz o energía);
+- **azul** = Tierra (todo lo que es comunicación);
+- **verde / amarillo / rojo** = solo el veredicto y la viabilidad. No se usan para decorar.
+
+**Por qué:** en un panel de control el color tiene que decir algo. Si el rojo aparece solo cuando algo falla, se ve en un segundo. Tipografías: Inter Tight para títulos (alternativa libre a la de la referencia, que es paga), Inter para texto y Roboto Mono para números y fórmulas, para que las cifras no "bailen" al cambiar.
+
+**Alternativa descartada:** un tema claro. Con proyector, el fondo oscuro cansa menos y hace resaltar el ámbar y el azul.
+
+## 15. La mascota Lumo
+
+**Elegimos:** un módulo lunar chiquito, dibujado por nosotros en SVG, con panel solar y antena, y tres caras: contento (sobrevive), preocupado (al límite) y dormido (no sobrevive, se quedó sin batería).
+
+**Por qué:** le da a un docente o a un chico un personaje que cuenta lo que pasa en la pantalla con palabras simples y propone el siguiente paso ("Estamos en el límite. ¿Probamos otro sitio?"). La cara está atada al veredicto, así que tampoco es decoración. Se puede ocultar.
+
+**Alternativa descartada:** un astronauta. Lumo es el módulo, que es justamente el que sufre la noche y el silencio.
+
+## 16. Uso de IA
+
+Ver `USO_DE_IA.md`. La aplicación en sí no usa IA.
 
 ---
 

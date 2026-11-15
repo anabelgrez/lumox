@@ -138,9 +138,12 @@ Out of scope: 3D globe, AI chatbot, thermal model, user accounts, mobile app.
 
 ---
 
-## Why we chose each thing
+## Documentation (Spanish)
 
-See [docs/decisiones.md](docs/decisiones.md) (Spanish): every design decision with its alternatives and the measured numbers behind it.
+- [docs/DECISIONES.md](docs/DECISIONES.md) — why we chose each thing, and what we discarded.
+- [docs/COMO_FUNCIONA.md](docs/COMO_FUNCIONA.md) — for non-programmers, with an end-to-end numeric example.
+- [docs/VERIFICACION.md](docs/VERIFICACION.md) — audit table: each calculation, how it was verified, measured result, date, and a "Reviewed by" column left for a team member.
+- [docs/USO_DE_IA.md](docs/USO_DE_IA.md) — which AI tools were used and for what.
 
 ## Front-end
 

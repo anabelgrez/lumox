@@ -64,6 +64,17 @@ async function fallback(spec) {
   return { result: data.result, trace: data.trace, precomputed: true, exported: data.exported };
 }
 
+// Parche de terreno para 2D/3D, con caché por sitio (no cambia con la fecha).
+const terrainCache = new Map();
+export function getTerrain(lat, lon) {
+  const k = `${lat},${lon}`;
+  if (!terrainCache.has(k)) {
+    const p = getJSON(`/api/terrain?lat=${lat}&lon=${lon}&half_size_m=12000&n=97`).catch((e) => { terrainCache.delete(k); throw e; });
+    terrainCache.set(k, p);
+  }
+  return terrainCache.get(k);
+}
+
 // Shareable link: the whole spec lives in the URL hash.
 export function encodeSpec(spec, extra = {}) {
   const s = btoa(unescape(encodeURIComponent(JSON.stringify({ ...spec, ...extra }))));

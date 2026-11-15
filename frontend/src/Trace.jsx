@@ -14,7 +14,12 @@ const show = (v) => {
   return String(v);
 };
 
-export function StepModal({ step, t, lang, onClose, onJump, steps }) {
+export function StepModal({ step, t, lang, onClose, onJump, steps, onAnim }) {
+  useEffect(() => {
+    if (!step) return;
+    const k = (e) => { if (e.key === "Escape") onClose(); };
+    addEventListener("keydown", k); return () => removeEventListener("keydown", k);
+  }, [step, onClose]);
   if (!step) return null;
   return (
     <div className="modal-bg" onClick={onClose}>
@@ -22,11 +27,12 @@ export function StepModal({ step, t, lang, onClose, onJump, steps }) {
         <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
           <span className="num mute">#{step.index}</span>
           <h3>{step.name}</h3>
-          <button className="btn" style={{ marginLeft: "auto" }} onClick={onClose}>{t.close}</button>
+          <button className="btn" style={{ marginLeft: "auto" }} onClick={onClose} autoFocus>{t.close}</button>
         </div>
         <div className="small mute" style={{ marginBottom: 8 }}>{step.description} <span className="num">[{step.id}]</span></div>
         {/* primero la versión en criollo, después la fórmula: el que quiere el detalle baja */}
-        <div className="infobox" style={{ marginBottom: 10 }}><b>{t.plainTitle}:</b> {plain(step, lang)}</div>
+        <div className="infobox" style={{ marginBottom: 10 }}><b>{t.plainTitle}:</b> {plain(step, lang)}
+          {onAnim && <div style={{ marginTop: 8 }}><button className="btn" onClick={onAnim}>▶ {lang === "es" ? "Ver animación" : "Watch animation"}</button></div>}</div>
         {step.formula && <><div className="small mute">{t.formula} (LaTeX)</div><div className="formula">{step.formula}</div></>}
         {step.inputs?.length > 0 && (
           <>

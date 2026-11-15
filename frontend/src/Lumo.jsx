@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { nextStep, nowPhrase } from "./plain.js";
 
 // Lumo: an original SVG mascot — a small lunar module with a solar panel and
 // an antenna. Three states tied to the verdict: happy (survives), worried
@@ -27,7 +28,7 @@ export function LumoSvg({ state = "happy", size = 92 }) {
     : <path d="M44 58 q7 7 14 0" stroke="#0b1020" strokeWidth="2.2" fill="none" strokeLinecap="round" />;
   const panelFill = state === "asleep" ? "#2b3a55" : "#3f8cff";
   return (
-    <svg viewBox="0 0 100 100" width={size} height={size} aria-label={`Lumo (${state})`}>
+    <svg className="mascot" viewBox="0 0 100 100" width={size} height={size} aria-label={`Lumo (${state})`}>
       {/* antenna */}
       <line x1="72" y1="30" x2="84" y2="12" stroke="#c5cedf" strokeWidth="2.5" strokeLinecap="round" />
       <circle cx="85" cy="11" r="3.5" fill={state === "fails" ? "#555" : "#f5b120"} />
@@ -50,37 +51,43 @@ export function LumoSvg({ state = "happy", size = 92 }) {
   );
 }
 
-export default function Lumo({ result, t, lang, guide, setGuide, visible, setVisible, loadExample, running }) {
+export default function Lumo({ result, t, lang, hour = 0, guide, setGuide, visible, setVisible, loadExample, running, onAction }) {
   const [step, setStep] = useState(0);
+  const es = lang === "es";
   if (!visible) return <button className="btn lumo-toggle" onClick={() => setVisible(true)}>{t.lumoShow}</button>;
   const state = running ? "worried" : !result ? "happy" : result.verdict.state === "survives" ? "happy" : result.verdict.state === "marginal" ? "worried" : "asleep";
-  const say = explain(result, lang, running);
   const steps = guideSteps(lang);
+  // Lumo usa las mismas frases que la traza: primero qué pasa ahora, después qué hacer
+  const next = nextStep(running ? null : result, lang);
+  const say = running ? (es ? "Estoy calculando… cada paso aparece abajo, en la tabla." : "Computing… each step shows up in the table below.")
+    : result ? nowPhrase(result, hour, lang) : (es ? "¡Hola! Soy Lumo." : "Hi! I'm Lumo.");
   return (
-    <div className="lumo">
-      <div className="bubble">
+    <div className="lumo" role="complementary" aria-label="Lumo">
+      <div className="bubble" aria-live="polite">
         {guide ? (
           <>
             <div><b>{t.exampleTitle}</b> · {step + 1}/{steps.length}</div>
             <div style={{ marginTop: 4 }}>{steps[step]}</div>
-            <div className="nav">
+            <div className="acts">
               <button className="btn" disabled={step === 0} onClick={() => setStep(step - 1)}>{t.prev}</button>
               {step < steps.length - 1 ? <button className="btn primary" onClick={() => { if (step === 0) loadExample(); setStep(step + 1); }}>{t.next}</button>
                 : <button className="btn primary" onClick={() => { setGuide(false); setStep(0); }}>OK</button>}
-              <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setVisible(false)}>{t.lumoHide}</button>
+              <button className="btn ghost" style={{ marginLeft: "auto" }} onClick={() => setVisible(false)}>{t.lumoHide}</button>
             </div>
           </>
         ) : (
           <>
             <div>{say}</div>
-            <div className="nav">
+            {!running && <div style={{ marginTop: 8, fontWeight: 600 }}>{next.text}</div>}
+            <div className="acts">
+              {!running && <button className="btn primary" onClick={() => next.action === "example" ? loadExample() : onAction?.(next.action)}>{es ? "Dale" : "Go"}</button>}
               <button className="btn" onClick={() => { setGuide(true); setStep(0); }}>{t.example}</button>
-              <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setVisible(false)}>{t.lumoHide}</button>
+              <button className="btn ghost" style={{ marginLeft: "auto" }} onClick={() => setVisible(false)}>{t.lumoHide}</button>
             </div>
           </>
         )}
       </div>
-      <div onClick={() => setVisible(false)}><LumoSvg state={state} /></div>
+      <button style={{ background: "none", border: 0, padding: 0 }} onClick={() => setVisible(false)} aria-label={t.lumoHide}><LumoSvg state={state} size={110} /></button>
     </div>
   );
 }

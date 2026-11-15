@@ -59,6 +59,11 @@ def _series(eph, horizon, trace, spec: ScenarioSpec, depends):
 
 
 def run_scenario(spec: ScenarioSpec, trace: Trace | None = None, store: bool = True) -> dict:
+    """La función que arma todo. El orden importa y es el mismo que ve el usuario
+    en el panel de cálculos en vivo:
+      efemérides -> horizonte -> fracción de disco -> energía -> métricas -> veredicto -> márgenes
+    Cada etapa escribe en la MISMA traza, así cualquier número de la pantalla se
+    puede seguir hasta el dato de NASA del que salió."""
     site = spec.site()
     start = parse_utc(spec.start)
     trace = trace or Trace(spec.label or f"{site.name} {spec.start}")
@@ -70,7 +75,8 @@ def run_scenario(spec: ScenarioSpec, trace: Trace | None = None, store: bool = T
         trace.note("site_unverified", "Site coordinates not re-verified",
                    f"{site.name}: coordinates from '{site.source}' have not been re-checked against a primary source.")
 
-    # Extended grid covers the delay scan so margins reuse one ephemeris call.
+    # Pedimos la efeméride una sola vez para misión + 30 días de posible atraso:
+    # así el margen en días no vuelve a llamar a Horizons/SPICE por cada fecha.
     extra_days = spec.max_delay_days if spec.margins else 0
     times_ext = grid(start, (spec.duration_days + extra_days) * 24.0, spec.step_h)
     n_mission = int(round(spec.duration_days * 24.0 / spec.step_h)) + 1

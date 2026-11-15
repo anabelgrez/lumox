@@ -76,6 +76,10 @@ def compute_metrics(times: np.ndarray, f_sun: np.ndarray, sun_el: np.ndarray, ea
 
 def verdict(longest_night_h: float, autonomy_h: float, longest_gap_h: float, max_gap_h: float,
             limit_band: float = 0.10, trace=None, depends=()) -> dict:
+    """Sobrevive / al límite / no sobrevive. A propósito es una comparación de
+    dos números contra dos límites, no una simulación: el planificador tiene que
+    poder verificarla a mano. 'Al límite' es estar a menos del 10 % del límite;
+    el 10 % es una convención nuestra y está escrita en la fórmula de la traza."""
     night_ratio = longest_night_h / autonomy_h if autonomy_h > 0 else np.inf
     gap_ratio = longest_gap_h / max_gap_h if max_gap_h > 0 else np.inf
     worst = max(night_ratio, gap_ratio)

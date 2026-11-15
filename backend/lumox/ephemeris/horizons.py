@@ -92,7 +92,11 @@ def _parse(text: str, expected: int) -> np.ndarray:
 
 def fetch_table(body: str, lat: float, lon: float, alt_m: float, times: np.ndarray,
                 timeout: float = 90.0) -> tuple[np.ndarray, str]:
-    """Return (array[n,4]: t_unix, az, el, range_km) and 'cache' | 'network'."""
+    """Devuelve (array[n,4]: t_unix, az, el, range_km) y de dónde salió: 'cache' o 'network'.
+
+    La caché en disco no es un lujo: Horizons pide que no le peguen en paralelo
+    y tarda ~3 s por consulta. Durante la demo todo lo que mostramos ya está
+    cacheado, así que si se cae internet, sigue andando igual."""
     q = build_query(body, lat, lon, alt_m, times)
     path = _cache_path(q)
     if path.exists():

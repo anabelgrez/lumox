@@ -41,7 +41,13 @@ def _disc_samples(n_r: int, n_phi: int):
 
 def disc_fraction(az_deg: np.ndarray, el_deg: np.ndarray, rho_deg: np.ndarray, horizon: Horizon,
                   n_r: int | None = None, n_phi: int | None = None) -> np.ndarray:
-    """Numerical visible fraction for arrays of body positions."""
+    """Fracción del disco que asoma sobre el horizonte, para muchas horas a la vez.
+
+    Por qué numérico y no solo la fórmula del segmento: dentro del disco (medio
+    grado) el horizonte puede tener una cresta de un lado y un valle del otro.
+    Pintamos el disco con anillos y sectores de igual área (así cada puntito vale
+    lo mismo) y contamos los que quedan arriba del terreno en SU azimut. La
+    fórmula cerrada queda al lado como control de que no metimos la pata."""
     n_r = n_r or int(DISC_INTEGRATION_RINGS.value)
     n_phi = n_phi or int(DISC_INTEGRATION_SECTORS.value)
     u, v, w = _disc_samples(n_r, n_phi)

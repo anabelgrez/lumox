@@ -81,6 +81,11 @@ def panel_power(S: np.ndarray, sun_az, sun_el, f_sun: np.ndarray, panel: Panel, 
 
 
 def energy_balance(P: np.ndarray, power: Power, dt_h: float, trace=None, depends=()) -> dict:
+    """La batería como cuenta bancaria, hora por hora. Un loop en Python en vez
+    de NumPy porque cada paso depende del anterior (y son unas 1000 horas, no
+    vale la pena complicarlo). 'deficit' cuenta las horas en que NO alcanzó para
+    alimentar la carga completa, mirando lo que había ANTES de gastar; si no,
+    la hora exacta en que se llega a cero se contaba de más."""
     n = P.size
     soc = np.empty(n)
     e = power.battery_wh * power.initial_soc

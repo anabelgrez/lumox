@@ -24,6 +24,11 @@ def _viable(m, autonomy_h, max_gap_h):
 
 
 def days_margin(spec, sun, earth, n_mission, autonomy_h, trace):
+    """¿Cuántos días se puede atrasar el alunizaje sin que deje de ser viable?
+    Corremos la ventana de la misión de a un día sobre la serie ya calculada y
+    repetimos las cuentas. El margen son los días CONSECUTIVOS viables desde d = 0:
+    si el día 3 falla, el margen es 2 aunque el día 10 vuelva a andar (eso va a
+    "mejores alternativas")."""
     dt = spec.step_h
     per_day = int(round(24.0 / dt))
     f_all, e_all = sun["fraction"], earth["visible"]
@@ -94,6 +99,10 @@ def metres_margin(spec, site, eph, horizon, sun, n_mission, trace):
 
 
 def km_margin(spec, site, eph, horizon, sun, earth, n_mission, autonomy_h, trace):
+    """Grilla de 5 x 5 puntos cada 2 km. En cada punto recalculamos el horizonte
+    (es lo único que cambia de verdad al moverse unos km) y reusamos la efeméride
+    del centro: la Tierra está a ~380.000 km, así que correrse 5,7 km mueve su
+    dirección menos de 0,001°. El número exacto queda en la traza."""
     n = int(NEIGHBOURHOOD_GRID.value)
     sp = NEIGHBOURHOOD_SPACING.value
     k = np.arange(n) - n // 2

@@ -75,6 +75,16 @@ export function getTerrain(lat, lon) {
   return terrainCache.get(k);
 }
 
+// Parche fino (DEM de 5 m del sitio, solo visual) para el nivel de detalle cercano.
+export function getTerrainFine(lat, lon) {
+  const k = `fine:${lat},${lon}`;
+  if (!terrainCache.has(k)) {
+    const p = getJSON(`/api/terrain?lat=${lat}&lon=${lon}&half_size_m=1500&n=201&fine=true`).catch(() => ({ available: false }));
+    terrainCache.set(k, p);
+  }
+  return terrainCache.get(k);
+}
+
 // Shareable link: the whole spec lives in the URL hash.
 export function encodeSpec(spec, extra = {}) {
   const s = btoa(unescape(encodeURIComponent(JSON.stringify({ ...spec, ...extra }))));

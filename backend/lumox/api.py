@@ -101,7 +101,7 @@ def limits():
 
 @app.get("/api/terrain")
 def terrain(site_id: str | None = None, lat: float | None = None, lon: float | None = None,
-            half_size_m: float = 12000.0, n: int = 97):
+            half_size_m: float = 12000.0, n: int = 97, fine: bool = False):
     """Parche de alturas del DEM alrededor del sitio, para la escena 3D (metros locales)."""
     if lat is None or lon is None:
         from .sites import get_site
@@ -110,7 +110,7 @@ def terrain(site_id: str | None = None, lat: float | None = None, lon: float | N
         except KeyError as e:
             raise HTTPException(404, str(e))
         lat, lon = s.lat, s.lon
-    patch = terrain_patch(lat, lon, half_size_m, max(9, min(n, 161)))
+    patch = terrain_patch(lat, lon, half_size_m, max(9, min(n, 241)), fine=fine)
     if patch is None:
         return {"available": False, "note": "no DEM covers this site; the 3D view shows a flat plane and says so"}
     patch["available"] = True

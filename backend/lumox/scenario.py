@@ -117,6 +117,9 @@ def run_scenario(spec: ScenarioSpec, trace: Trace | None = None, store: bool = T
             # altura del terreno justo debajo de cada cuerpo, para las frases "esa loma lo tapa"
             "sun_horizon_deg": np.asarray(sun["horizon_at_body_deg"])[sl].tolist(),
             "earth_horizon_deg": np.asarray(earth["horizon_at_body_deg"])[sl].tolist(),
+            # a qué distancia está la loma que tapa (o casi tapa) a cada cuerpo; None si se ve entero
+            "sun_block_m": _block(horizon, eph.sun_az[sl], f_sun),
+            "earth_block_m": _block(horizon, eph.earth_az[sl], earth["fraction"][sl]),
             "sun_rho_deg": sun["angular_radius_deg"][sl].tolist(), "earth_rho_deg": earth["angular_radius_deg"][sl].tolist(),
             "irradiance_wm2": S.tolist(), "power_w": P.tolist(), "soc_frac": bal["soc_frac"].tolist(),
         },
@@ -136,6 +139,18 @@ def run_scenario(spec: ScenarioSpec, trace: Trace | None = None, store: bool = T
     if store:
         STORE.put(trace)
     return result
+
+
+def _block(horizon, az, frac) -> list:
+    """Distancia (m) al punto de terreno que define el horizonte en la dirección del
+    cuerpo, para las horas en que no se ve entero. Es el mismo punto que usó el
+    cálculo del horizonte (el máximo del rayo), tomado en el azimut más cercano."""
+    if horizon.source == "flat":
+        return [None] * len(frac)
+    n = horizon.azimuth.size
+    idx = np.rint(np.asarray(az) / 360.0 * n).astype(int) % n
+    d = horizon.distance[idx]
+    return [None if (f >= 0.999 or not np.isfinite(x)) else float(x) for f, x in zip(np.asarray(frac), d)]
 
 
 def _events(times, sun_up, earth_up) -> list[dict]:

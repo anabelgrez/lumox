@@ -12,6 +12,7 @@ frontend/dist/
 # Heavy data: kernels, DEMs, caches (never committed)
 data/kernels/
 data/dem/
+data/dem_site/
 data/cache/
 *.bsp
 *.bpc

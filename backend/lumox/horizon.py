@@ -145,12 +145,32 @@ def dem_coverage(lat: float, lon: float, dem_file: str | None = None) -> dict:
 
 # ---------------------------------------------------------------- parche 3D
 
+SITE_DEM_DIR = ROOT / "dem_site"   # DEM de 5 m/px (Barker et al. 2021): solo para dibujar
+
+
+def _pick_site_dem(lat: float, lon: float):
+    """DEM fino que cubra el sitio, si hay. El motor NO lo usa: cambiaría todos los números."""
+    if not SITE_DEM_DIR.exists():
+        return None
+    for p in sorted(SITE_DEM_DIR.glob("*.tif")):
+        try:
+            ds, tf = _open_dem(str(p))
+            x, y = tf.transform(lon, lat)
+            b = ds.bounds
+            if b.left <= x <= b.right and b.bottom <= y <= b.top:
+                return p
+        except Exception:
+            continue
+    return None
+
+
 def terrain_patch(lat: float, lon: float, half_size_m: float = 12_000.0, n: int = 97,
-                  dem_file: str | None = None) -> dict | None:
+                  dem_file: str | None = None, fine: bool = False) -> dict | None:
     """Grilla de alturas alrededor del sitio, en metros locales (norte/este), para la
     escena 3D. No es un cálculo nuevo: son las mismas muestras del DEM que usa el
-    horizonte, relativas a la altura del sitio. Devuelve None si no hay DEM."""
-    p = _pick_dem(lat, lon, dem_file)
+    horizonte, relativas a la altura del sitio. Devuelve None si no hay DEM.
+    fine=True usa el DEM de 5 m del sitio (solo visual)."""
+    p = _pick_site_dem(lat, lon) if fine else _pick_dem(lat, lon, dem_file)
     if p is None:
         return None
     ds, tf = _open_dem(str(p))
@@ -196,7 +216,8 @@ def terrain_patch(lat: float, lon: float, half_size_m: float = 12_000.0, n: int 
     return {"n": n, "half_size_m": half_size_m, "step_m": float(k[1] - k[0]), "site_z_m": float(centre),
             "heights_m": np.nan_to_num(rel, nan=0.0).tolist(), "heights_local_m": local.tolist(),
             "min_m": float(np.nanmin(rel)), "max_m": float(np.nanmax(rel)),
-            "dem": p.name, "resolution_m": float(max(ds.res))}
+            "dem": p.name, "resolution_m": float(max(ds.res)), "fine": fine,
+            "visual_only": fine}
 
 
 # ---------------------------------------------------------------- horizon
@@ -226,12 +247,12 @@ def terrain_horizon(lat: float, lon: float, mast_m: float, site_elev_m: float | 
     """Compute the terrain horizon from a DEM; fall back to flat with a trace notice."""
     # Los márgenes piden ~33 horizontes sin traza; los guardamos para no recalcular
     # lo mismo cada vez que cambia la fecha (el relieve no depende de la fecha).
-    key = (round(lat, 7), round(lon, 7), mast_m, site_elev_m, dem_file, n_az, max_dist_m)
-    if trace is None and key in _HCACHE:
-        return _HCACHE[key]
     p = _pick_dem(lat, lon, dem_file)
     if p is None:
         return flat_horizon(site_elev_m or 0.0, mast_m, n_az, trace)
+    key = (p.name, round(lat, 7), round(lon, 7), mast_m, site_elev_m, n_az, max_dist_m)   # incluye qué DEM se usó
+    if trace is None and key in _HCACHE:
+        return _HCACHE[key]
     h = _terrain_horizon(p, lat, lon, mast_m, site_elev_m, n_az, max_dist_m, trace)
     if trace is None:
         if len(_HCACHE) > 400:

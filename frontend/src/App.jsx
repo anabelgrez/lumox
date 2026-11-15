@@ -7,6 +7,8 @@ import TracePanel, { StepModal } from "./Trace.jsx";
 import { DaysMargin, Heatmap, KmMargin, MetresMargin } from "./Margins.jsx";
 import { Calculator, Compare, Inferences, Profiles, Validation } from "./Views.jsx";
 import Lumo from "./Lumo.jsx";
+import Scene3D from "./Scene3D.jsx";
+import Explainers from "./Explainers.jsx";
 
 const EXAMPLE = { site_id: "shackleton", start: "2027-01-24T00:00:00Z", duration_days: 14, mast_m: 2, max_comm_gap_h: 48,
   power: { load_w: 500, battery_wh: 20000, initial_soc: 1 }, panel: { area_m2: 10, efficiency: 0.3, tracking: true, tilt_deg: 90, azimuth_deg: 0 },
@@ -32,9 +34,12 @@ export default function App() {
   const [modal, setModal] = useState(null);
   const [hour, setHour] = useState(0);
   const [allResults, setAllResults] = useState({});
-  const [lumoVisible, setLumoVisible] = useState(true);
+  // en pantallas angostas Lumo arranca escondido: su globo tapa los controles
+  const [lumoVisible, setLumoVisible] = useState(() => window.innerWidth > 760);
   const [guide, setGuide] = useState(false);
   const [copied, setCopied] = useState(false);
+  // modo didáctico: muestra las traducciones "en criollo" y las animaciones; arranca prendido
+  const [didactic, setDidactic] = useState(true);
   const abort = useRef();
 
   useEffect(() => { api.status().then(setStatus).catch(() => setStatus(null)); api.sites().then(setSites).catch(() => setSites([])); }, []);
@@ -99,6 +104,7 @@ export default function App() {
           <button className="btn sun" onClick={loadExample}>{t.example}</button>
           <button className="btn" onClick={share}>{copied ? t.shared : t.share}</button>
           <div className="seg" role="group" aria-label={t.lang}>{["es", "en"].map((l) => <button key={l} className={lang === l ? "on" : ""} onClick={() => setLang(l)}>{l.toUpperCase()}</button>)}</div>
+          <button className={"btn" + (didactic ? " primary" : "")} onClick={() => setDidactic(!didactic)} title={t.didactic}>🎓 {t.didactic}</button>
         </div>
         <div className="status" style={{ width: "100%" }}>
           <span className={"dot " + (online ? "ok" : "bad")} />{online ? t.online : t.offline}
@@ -118,10 +124,18 @@ export default function App() {
         <div className="grid main">
           <div className="stack">
             <Panorama result={result} t={t} hour={hour} setHour={setHour} />
+            {didactic && <Explainers lang={lang} result={result} />}
             {result && <Cards result={result} t={t} open={openStep} hour={hour} />}
             {result && <Inferences result={result} t={t} lang={lang} open={openStep} />}
           </div>
-          <TracePanel steps={steps} order={order} traceId={traceId} t={t} onOpen={openStep} highlight={modal?.id} precomputed={precomputed} running={running} />
+          <TracePanel steps={steps} order={order} traceId={traceId} t={t} lang={lang} didactic={didactic} onOpen={openStep} highlight={modal?.id} precomputed={precomputed} running={running} />
+        </div>
+      )}
+
+      {tab === "scene3d" && result && (
+        <div className="stack">
+          <Scene3D result={result} hour={hour} t={t} lang={lang} />
+          <Panorama result={result} t={t} hour={hour} setHour={setHour} />
         </div>
       )}
 
@@ -143,7 +157,7 @@ export default function App() {
       {tab === "calc" && <Calculator t={t} traceId={traceId} onSaved={(r) => { setSteps((p) => ({ ...p, [r.step.id]: r.step })); setOrder((p) => [...p, r.step.id]); }} />}
       {tab === "validation" && <Validation status={status} result={result} t={t} lang={lang} />}
 
-      <StepModal step={modal} t={t} onClose={() => setModal(null)} onJump={openStep} steps={steps} />
+      <StepModal step={modal} t={t} lang={lang} onClose={() => setModal(null)} onJump={openStep} steps={steps} />
       <Lumo result={result} t={t} lang={lang} guide={guide} setGuide={setGuide} visible={lumoVisible} setVisible={setLumoVisible} loadExample={loadExample} running={running} />
     </div>
   );

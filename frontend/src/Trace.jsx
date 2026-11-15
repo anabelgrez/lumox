@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { api } from "./api.js";
+import { plain } from "./plain.js";
 
 // Live trace panel: steps appear as the engine emits them. Clicking a step
 // opens its detail (formula, inputs with units and sources, result,
@@ -13,7 +14,7 @@ const show = (v) => {
   return String(v);
 };
 
-export function StepModal({ step, t, onClose, onJump, steps }) {
+export function StepModal({ step, t, lang, onClose, onJump, steps }) {
   if (!step) return null;
   return (
     <div className="modal-bg" onClick={onClose}>
@@ -24,6 +25,8 @@ export function StepModal({ step, t, onClose, onJump, steps }) {
           <button className="btn" style={{ marginLeft: "auto" }} onClick={onClose}>{t.close}</button>
         </div>
         <div className="small mute" style={{ marginBottom: 8 }}>{step.description} <span className="num">[{step.id}]</span></div>
+        {/* primero la versión en criollo, después la fórmula: el que quiere el detalle baja */}
+        <div className="infobox" style={{ marginBottom: 10 }}><b>{t.plainTitle}:</b> {plain(step, lang)}</div>
         {step.formula && <><div className="small mute">{t.formula} (LaTeX)</div><div className="formula">{step.formula}</div></>}
         {step.inputs?.length > 0 && (
           <>
@@ -51,7 +54,7 @@ export function StepModal({ step, t, onClose, onJump, steps }) {
   );
 }
 
-export default function TracePanel({ steps, order, traceId, t, onOpen, highlight, precomputed, running }) {
+export default function TracePanel({ steps, order, traceId, t, lang, didactic, onOpen, highlight, precomputed, running }) {
   const ref = useRef();
   useEffect(() => { if (running && ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [order.length, running]);
   const exportJson = async () => {
@@ -70,6 +73,7 @@ export default function TracePanel({ steps, order, traceId, t, onOpen, highlight
             <div className="h"><span className="idx">#{s.index}</span><span>{s.name}</span></div>
             {s.formula && <div className="f">{s.formula}</div>}
             <div className="r">= {show(s.result?.value)} {s.result?.unit}</div>
+            {didactic && <div className="small" style={{ marginTop: 4, color: "var(--soft)" }}>{plain(s, lang)}</div>}
           </div>); })}
         {order.length === 0 && <p className="mute small">—</p>}
       </div>

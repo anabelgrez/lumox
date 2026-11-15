@@ -138,12 +138,18 @@ Out of scope: 3D globe, AI chatbot, thermal model, user accounts, mobile app.
 
 ---
 
+## Credits for external assets
+
+Visual-only assets (they never change a number): LRO/LROC colour map and LOLA elevation map from NASA's Scientific Visualization Studio CGI Moon Kit (Ernie Wright, [svs.gsfc.nasa.gov/4720](https://svs.gsfc.nasa.gov/4720)); Blue Marble Next Generation, NASA Earth Observatory / Reto Stöckli ([Visible Earth 73909](https://visibleearth.nasa.gov/images/73909)); Apollo Lunar Module model, [NASA 3D Resources](https://science.nasa.gov/3d-resources/apollo-lunar-module/) (illustrative); LOLA 5 m/px site DEMs, Barker et al. 2021, [PGDA product 78](https://pgda.gsfc.nasa.gov/products/78). Full list with licences in [docs/FUENTES.md](docs/FUENTES.md). No NASA logo or insignia is used; Lumox is not an official NASA product.
+
 ## Documentation (Spanish)
 
 - [docs/DECISIONES.md](docs/DECISIONES.md) — why we chose each thing, and what we discarded.
 - [docs/COMO_FUNCIONA.md](docs/COMO_FUNCIONA.md) — for non-programmers, with an end-to-end numeric example.
 - [docs/VERIFICACION.md](docs/VERIFICACION.md) — audit table: each calculation, how it was verified, measured result, date, and a "Reviewed by" column left for a team member.
 - [docs/USO_DE_IA.md](docs/USO_DE_IA.md) — which AI tools were used and for what.
+- [docs/FUENTES.md](docs/FUENTES.md) — every external resource, link, licence and use.
+- [docs/capturas/](docs/capturas) — before/after screenshots of the redesign.
 
 ## Front-end
 

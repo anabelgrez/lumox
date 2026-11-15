@@ -42,6 +42,22 @@ Auditoría de cada cálculo: cómo se verificó, qué dio la medición y cuándo
 | En el polo el Sol se mantiene a pocos grados del horizonte | Shackleton, 24/01–07/02/2027: elevación solar entre 0,28° y 0,67° | 2026-11-15 |
 | La Tierra sube y baja con la libración (~27 días) | Shackleton, misma ventana: elevación de la Tierra entre −7,00° y +6,32° | 2026-11-15 |
 
+## Prueba de comprensión con personas de afuera del equipo
+
+**Criterio:** una persona que nunca vio Lumox abre el ejemplo (`http://localhost:5173/#ejemplo`) y, en 10 segundos y sin ayuda, puede decir si la misión sobrevive y por qué.
+
+**Cómo hacerla:** con 3 a 5 personas que no conozcan el proyecto (por ejemplo, de otra mesa de la sede). Abrir el enlace, decir solo "mirá esta pantalla", cronometrar y preguntar dos cosas: "¿sobrevive?" y "¿por qué?". No explicar nada antes. La prueba pasa si al menos 4 de 5 responden bien las dos en menos de 10 s.
+
+| # | Persona (sin nombre) | ¿Sobrevive? (respuesta) | ¿Por qué? (respuesta) | Segundos | ¿Correcto? | Dónde dudó | Anotó |
+|---|---|---|---|---|---|---|---|
+| 1 | | | | | | | |
+| 2 | | | | | | | |
+| 3 | | | | | | | |
+| 4 | | | | | | | |
+| 5 | | | | | | | |
+
+Todavía no se hizo.
+
 ## Cómo completar "Revisado por"
 
 1. Correr `test.bat` (o la prueba de esa fila) y comparar con el resultado de la tabla.

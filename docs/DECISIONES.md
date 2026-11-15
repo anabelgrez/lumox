@@ -120,6 +120,36 @@ Documento del equipo Lunáticos para explicar (a nosotros mismos, al jurado y a 
 
 **Alternativa descartada:** un astronauta. Lumo es el módulo, que es justamente el que sufre la noche y el silencio.
 
+## 17. Rediseño: una pregunta por pantalla (rama `mejora-3d-ux`)
+
+**Problema:** la pantalla tenía demasiada información junta y alguien nuevo no entendía qué estaba mirando.
+
+**Elegimos:**
+- **Modo Simple por defecto**, con dos pantallas: primero la pregunta ("¿Tu misión sobrevive si se atrasa?") con tres datos y un botón; después la respuesta.
+- **La respuesta primero:** el veredicto como frase grande y en lenguaje llano ("No sobrevive: 230 horas sin Sol") y el porqué en una sola oración. Debajo, **solo tres tarjetas** (Energía, Comunicación, Margen); el resto está dentro de "Ver detalle".
+- **Lo técnico existe, pero se abre a pedido:** la tabla de cálculos queda plegada como "¿Cómo lo calculamos?", y el modo Técnico conserva todo lo de antes.
+- **Los márgenes como acciones:** "Cambiar fecha", "Subir el panel" y "Mover el sitio" muestran al instante cuánto mejora, con los datos que el motor ya calculó. No hay que esperar otro cálculo para ver el efecto.
+- **Ayudas en contexto:** un "?" de una línea en cada número, leyendas siempre visibles y un recorrido de Lumo en 4 pasos la primera vez, que se puede saltar.
+- **Jerarquía:** más aire, menos bordes, un solo color de acento (azul) y nada por debajo de 13 px.
+- **"Ver ejemplo" instantáneo:** abre el resultado precalculado y lo refresca en vivo sin vaciar la pantalla.
+
+**Criterio:** alguien que nunca vio Lumox abre el ejemplo y en 10 segundos dice si sobrevive y por qué. La prueba con personas de afuera está en `VERIFICACION.md`.
+
+**Alternativa descartada:** achicar el panel de control anterior. Seguía mostrando 20 cosas a la vez; el problema era de orden, no de tamaño.
+
+## 18. Visor 3D: realismo sin inventar
+
+**Elegimos:**
+- **Dos niveles de detalle:** lejos, el DEM de 80 m que usa el cálculo; cerca del módulo, el DEM LOLA de 5 m (Barker et al. 2021), **solo para ver**. No lo metimos en el cálculo porque cambiaría todos los números y la validación (ver `FUENTES.md`).
+- **Líneas de vista** del módulo al Sol y a la Tierra: ámbar o azul si se ven; roja y cortada en la loma si no, con el cartel "El Sol queda tapado por esta loma (a 80 m)". La loma y su distancia las da el motor: es el mismo punto que usó el cálculo del horizonte.
+- **Luz real / Luz de estudio:** la luz real del polo es casi negra. La de estudio agrega un relleno suave y muestra siempre el rótulo **"Iluminación ilustrativa"**. La luz del Sol, en cambio, es siempre la del motor: su dirección es la calculada y su intensidad es la fracción de disco visible.
+- **Exageración ×1 / ×3** con rótulo cuando no es ×1.
+- **La Tierra con su fase:** la textura Blue Marble está iluminada por la dirección real del Sol en un sombreador propio, para que la fase no dependa de lo que tapa el relieve.
+- **Cámaras con nombre y transiciones suaves:** "Desde el módulo", "Vista aérea" y "Recorrido" (órbita lenta para el video). Con "reducir movimiento" el cambio es instantáneo.
+- **Rendimiento:** la escena solo se redibuja cuando algo cambia. El visor muestra el costo real de cada cuadro (ms) y el tiempo de carga, para medirlo en la notebook de la demo.
+
+**Hallazgo que dejamos a la vista:** en el ejemplo de Shackleton, la "loma" que tapa el Sol y la Tierra está a 80 m, es decir, es el píxel vecino del DEM de 80 m (el sitio está en una pendiente). Es lo que usa el cálculo y por eso lo mostramos. Con el DEM de 5 m podría cambiar. Es el mejor argumento para evaluar, más adelante, usar el DEM fino en el motor.
+
 ## 16. Uso de IA
 
 Ver `USO_DE_IA.md`. La aplicación en sí no usa IA.

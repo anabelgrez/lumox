@@ -18,7 +18,8 @@
   --font-title: "Inter Tight", "Manrope", Inter, system-ui, sans-serif;
   --font-body: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
   --mono: "Roboto Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
-  --fs-xs: 11px; --fs-sm: 12.5px; --fs-md: 14px; --fs-lg: 16px; --fs-xl: 20px; --fs-2xl: 28px;
+  /* nada por debajo de 13 px: se lee en un proyector y en un celular */
+  --fs-xs: 13px; --fs-sm: 14px; --fs-md: 15px; --fs-lg: 18px; --fs-xl: 22px; --fs-2xl: 30px; --fs-hero: clamp(28px, 4vw, 44px);
   /* espaciado, radios, sombras */
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px;
   --r-sm: 8px; --r-md: 12px; --r-lg: 16px;

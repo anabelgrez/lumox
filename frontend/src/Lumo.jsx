@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { nextStep, nowPhrase } from "./plain.js";
 
 // Lumo: an original SVG mascot — a small lunar module with a solar panel and
@@ -51,12 +51,37 @@ export function LumoSvg({ state = "happy", size = 92 }) {
   );
 }
 
-export default function Lumo({ result, t, lang, hour = 0, guide, setGuide, visible, setVisible, loadExample, running, onAction }) {
+const TOUR_KEY = "lumox.tour.v1";
+
+export default function Lumo({ result, t, lang, hour = 0, guide, setGuide, visible, setVisible, loadExample, running, onAction, tourReady }) {
   const [step, setStep] = useState(0);
   const es = lang === "es";
+  const steps = guideSteps(lang);
+
+  // la primera vez que aparece una respuesta, arranca el recorrido (se puede saltar)
+  useEffect(() => {
+    if (!tourReady) return;
+    let done = false;
+    try { done = localStorage.getItem(TOUR_KEY) === "1"; } catch { /* sin almacenamiento: lo mostramos igual */ }
+    if (!done) { setVisible(true); setGuide(true); setStep(0); }
+  }, [tourReady]); // eslint-disable-line
+
+  // resalta la parte de la pantalla de la que habla cada paso
+  useEffect(() => {
+    document.querySelectorAll(".tour-hi").forEach((e) => e.classList.remove("tour-hi"));
+    if (!guide || !tourReady) return;
+    const el = document.querySelector(`[data-tour="${steps[step]?.target}"]`);
+    if (el) { el.classList.add("tour-hi"); el.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" }); }
+  }, [guide, step, tourReady, lang]); // eslint-disable-line
+
+  const endTour = () => {
+    setGuide(false); setStep(0);
+    try { localStorage.setItem(TOUR_KEY, "1"); } catch { /* sin almacenamiento */ }
+    document.querySelectorAll(".tour-hi").forEach((e) => e.classList.remove("tour-hi"));
+  };
+
   if (!visible) return <button className="btn lumo-toggle" onClick={() => setVisible(true)}>{t.lumoShow}</button>;
   const state = running ? "worried" : !result ? "happy" : result.verdict.state === "survives" ? "happy" : result.verdict.state === "marginal" ? "worried" : "asleep";
-  const steps = guideSteps(lang);
   // Lumo usa las mismas frases que la traza: primero qué pasa ahora, después qué hacer
   const next = nextStep(running ? null : result, lang);
   const say = running ? (es ? "Estoy calculando… cada paso aparece abajo, en la tabla." : "Computing… each step shows up in the table below.")
@@ -66,13 +91,14 @@ export default function Lumo({ result, t, lang, hour = 0, guide, setGuide, visib
       <div className="bubble" aria-live="polite">
         {guide ? (
           <>
-            <div><b>{t.exampleTitle}</b> · {step + 1}/{steps.length}</div>
-            <div style={{ marginTop: 4 }}>{steps[step]}</div>
+            <div className="small mute">{es ? "Recorrido" : "Tour"} · {step + 1}/{steps.length}</div>
+            <div style={{ marginTop: 4 }}><b>{steps[step].title}</b></div>
+            <div style={{ marginTop: 4 }}>{steps[step].text}</div>
             <div className="acts">
               <button className="btn" disabled={step === 0} onClick={() => setStep(step - 1)}>{t.prev}</button>
-              {step < steps.length - 1 ? <button className="btn primary" onClick={() => { if (step === 0) loadExample(); setStep(step + 1); }}>{t.next}</button>
-                : <button className="btn primary" onClick={() => { setGuide(false); setStep(0); }}>OK</button>}
-              <button className="btn ghost" style={{ marginLeft: "auto" }} onClick={() => setVisible(false)}>{t.lumoHide}</button>
+              {step < steps.length - 1 ? <button className="btn primary" onClick={() => { if (!result) loadExample(); setStep(step + 1); }}>{t.next}</button>
+                : <button className="btn primary" onClick={endTour}>{es ? "Listo" : "Done"}</button>}
+              <button className="btn ghost" style={{ marginLeft: "auto" }} onClick={endTour}>{es ? "Saltar" : "Skip"}</button>
             </div>
           </>
         ) : (
@@ -81,7 +107,7 @@ export default function Lumo({ result, t, lang, hour = 0, guide, setGuide, visib
             {!running && <div style={{ marginTop: 8, fontWeight: 600 }}>{next.text}</div>}
             <div className="acts">
               {!running && <button className="btn primary" onClick={() => next.action === "example" ? loadExample() : onAction?.(next.action)}>{es ? "Dale" : "Go"}</button>}
-              <button className="btn" onClick={() => { setGuide(true); setStep(0); }}>{t.example}</button>
+              <button className="btn" onClick={() => { if (!result) loadExample(); setGuide(true); setStep(0); }}>{es ? "Recorrido" : "Tour"}</button>
               <button className="btn ghost" style={{ marginLeft: "auto" }} onClick={() => setVisible(false)}>{t.lumoHide}</button>
             </div>
           </>
@@ -117,16 +143,18 @@ function explain(r, lang, running) {
   return parts.join(" ");
 }
 
+// Recorrido de 4 pasos: qué dice el veredicto, qué es el visor, cómo mover la fecha
+// y cómo probar otra cosa. "target" es el data-tour de la parte que se resalta.
 function guideSteps(lang) {
   return lang === "es" ? [
-    "Paso 1: un módulo iba a alunizar cerca del polo sur (Shackleton) el 15 de enero de 2027, pero el cohete se atrasó 9 días. Tocá «Siguiente» y cargo el caso.",
-    "Paso 2: mirá el panorama. La silueta es el terreno; el Sol roza las montañas y la Tierra sube y baja cada ~27 días.",
-    "Paso 3: las tarjetas dicen cuánto dura la noche más larga y el corte de comunicación; el veredicto compara con la batería y el límite de corte.",
-    "Paso 4: en «Márgenes» ves cuántos días más podés atrasarte, qué gana subir el panel y qué pasa si aterrizás unos kilómetros más allá.",
+    { target: "verdict", title: "1. La respuesta", text: "Arriba de todo está el veredicto: si la misión sobrevive y por qué, en una oración. El color dice lo mismo: verde sobrevive, amarillo justo, rojo no." },
+    { target: "viewer", title: "2. Lo que se ve desde el sitio", text: "Esto es el relieve real alrededor del módulo. El Sol y la Tierra están donde el cálculo dice. Si una loma los tapa, la línea se pone roja." },
+    { target: "timeline", title: "3. Mover el tiempo", text: "Arrastrá esta barra para recorrer la misión hora por hora. Las franjas muestran cuándo hay Sol y cuándo se ve la Tierra." },
+    { target: "margins", title: "4. Probar otra cosa", text: "Acá podés cambiar la fecha, subir el panel o mover el sitio unos km, y ver al instante si mejora." },
   ] : [
-    "Step 1: a lander was to touch down near the south pole (Shackleton) on 15 Jan 2027, but the rocket slipped 9 days. Press “Next” and I load the case.",
-    "Step 2: look at the panorama. The silhouette is the terrain; the Sun skims the ridges and the Earth rises and sets every ~27 days.",
-    "Step 3: the cards show the longest night and the longest comm gap; the verdict compares them with the battery and the gap limit.",
-    "Step 4: in “Margins” you see how many more days you can slip, what raising the panel buys, and what happens a few kilometres away.",
+    { target: "verdict", title: "1. The answer", text: "At the top is the verdict: whether the mission survives and why, in one sentence. The colour says the same: green survives, yellow barely, red fails." },
+    { target: "viewer", title: "2. What the site looks like", text: "This is the real terrain around the lander. Sun and Earth are where the calculation puts them. If a ridge blocks them, the line turns red." },
+    { target: "timeline", title: "3. Move through time", text: "Drag this bar to go through the mission hour by hour. The bands show when there is Sun and when Earth is in view." },
+    { target: "margins", title: "4. Try something else", text: "Here you can change the date, raise the panel or move the site a few km, and see right away whether it helps." },
   ];
 }

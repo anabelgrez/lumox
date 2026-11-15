@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, decodeSpec, encodeSpec, getTerrain, runScenario } from "./api.js";
+import { api, decodeSpec, encodeSpec, getJSON, getTerrain, runScenario } from "./api.js";
+import { Answer, Home } from "./SimpleView.jsx";
+import Timeline from "./Timeline.jsx";
 import { T } from "./i18n.js";
 import { Ic, Logo } from "./icons.jsx";
 import { PanoramaSvg } from "./Panorama.jsx";
@@ -42,6 +44,8 @@ export default function App() {
   const [lang, setLang] = useState(() => (navigator.language || "es").startsWith("es") ? "es" : "en");
   const t = T[lang], es = lang === "es";
   const [mode, setMode] = useState("simple");              // simple | tech
+  // en Simple: primero la pregunta, después la respuesta
+  const [screen, setScreen] = useState(() => (decodeSpec() ? "answer" : "home"));
   const [section, setSection] = useState("overview");
   const [view, setView] = useState("3d");                   // 2d | 3d
   const webgl = useMemo(hasWebGL, []);
@@ -70,22 +74,34 @@ export default function App() {
   useEffect(() => { api.status().then(setStatus).catch(() => setStatus(null)); api.sites().then(setSites).catch(() => setSites([])); }, []);
   useEffect(() => { document.documentElement.lang = lang; }, [lang]);
 
-  const run = useCallback(async (s = spec) => {
+  const run = useCallback(async (s = spec, { keep = false } = {}) => {
     abort.current?.abort(); const ctl = new AbortController(); abort.current = ctl;
-    setRunning(true); setError(null); setSteps({}); setOrder([]); setTraceId(null); setPrecomputed(false); setHour(0); setPlaying(false);
+    setRunning(true); setError(null); setPlaying(false);
+    // keep: se deja a la vista lo que ya hay (por ejemplo, el precalculado) mientras llega lo nuevo
+    if (!keep) { setSteps({}); setOrder([]); setTraceId(null); setPrecomputed(false); setHour(0); }
     try {
+      let first = keep;
       const out = await runScenario(s, {
         signal: ctl.signal,
-        onStart: (id) => setTraceId(id),
-        onStep: (st) => { setSteps((p) => ({ ...p, [st.id]: st })); setOrder((p) => [...p, st.id]); },
+        onStart: (id) => { if (!keep) setTraceId(id); },
+        onStep: (st) => {
+          if (first) { first = false; setSteps({}); setOrder([]); }
+          setSteps((p) => ({ ...p, [st.id]: st })); setOrder((p) => [...p, st.id]);
+        },
       });
-      setResult(out.result); setTraceId(out.result.trace_id);
+      setResult(out.result); setTraceId(out.result.trace_id); setPrecomputed(false);
       if (out.precomputed) { setPrecomputed(true); const m = {}; out.trace.steps.forEach((x) => { m[x.id] = x; }); setSteps(m); setOrder(out.trace.steps.map((x) => x.id)); }
       setAllResults((p) => ({ ...p, [s.site_id]: out.result }));
     } catch (e) { if (e.name !== "AbortError") setError(String(e.message || e)); }
     finally { setRunning(false); }
   }, [spec]);
-  useEffect(() => { run(spec); }, []); // eslint-disable-line
+  // al abrir solo calculamos si vino un escenario en el enlace; si no, se espera la pregunta.
+  // "#ejemplo" abre directo el caso del atraso (sirve para la demo y para las capturas).
+  useEffect(() => {
+    if (location.hash === "#ejemplo") { loadExample(); return; }
+    if (screen === "answer") run(spec);
+  }, []); // eslint-disable-line
+  useEffect(() => { if (mode === "tech" && !result && !running) run(spec); }, [mode]); // eslint-disable-line
 
   // el parche de terreno depende solo del sitio
   useEffect(() => {
@@ -104,9 +120,21 @@ export default function App() {
   }, [playing, result]);
 
   const update = (patchSpec) => { const s = { ...spec, ...patchSpec }; setSpec(s); setAllResults({}); return s; };
-  const go = (patchSpec) => run(update(patchSpec));
+  const go = (patchSpec) => run(update(patchSpec), { keep: true });
   const loadPreset = (k) => { setPreset(k); const s = { ...PRESETS[k].spec, site_id: spec.site_id }; setSpec(s); run(s); };
-  const loadExample = () => { setSection("overview"); setPreset("delay9"); const s = PRESETS.delay9.spec; setSpec(s); run(s); };
+  // El ejemplo abre al instante con el resultado precalculado (export.py) y
+  // después se refresca con el motor en vivo, sin vaciar la pantalla.
+  const loadExample = async () => {
+    setSection("overview"); setPreset("delay9"); setScreen("answer");
+    const s = PRESETS.delay9.spec; setSpec(s); setAllResults({});
+    try {
+      const pre = await getJSON("/scenarios/example-delay.json");
+      setResult(pre.result); setPrecomputed(true); setHour(0);
+      const st = {}; pre.trace.steps.forEach((x) => { st[x.id] = x; }); setSteps(st); setOrder(pre.trace.steps.map((x) => x.id)); setTraceId(null);
+      run(s, { keep: true });
+    } catch { run(s); }
+  };
+  const startSimple = (p) => { const s = { ...spec, ...p }; setSpec(s); setAllResults({}); setScreen("answer"); setResult(null); run(s); };
   const runWith = async (p) => (await runScenario({ ...spec, ...p, label: "profile" })).result;
   const runB = async ({ site_id, delay }) => (await runScenario({ ...spec, site_id, start: addDays(spec.start, delay), label: "compare-B" })).result;
   const openStep = async (id) => {
@@ -162,16 +190,51 @@ export default function App() {
           </div>
         </div>
       )}
-      {result && (
-        <div className="slider">
-          <button className="btn icon" onClick={() => setPlaying(!playing)} aria-label={playing ? (es ? "Pausar" : "Pause") : (es ? "Reproducir día lunar" : "Play lunar day")}>{playing ? <Ic.pause /> : <Ic.play />}</button>
-          <input type="range" min={0} max={n - 1} value={Math.min(hour, n - 1)} onChange={(e) => { setPlaying(false); setHour(+e.target.value); }} aria-label={es ? "Hora de la misión" : "Mission hour"} />
-          <span className="num small">{curTime.replace("T", " ").slice(0, 16)} UTC · h {hour}</span>
-        </div>
-      )}
+      {result && <Timeline result={result} hour={hour} setHour={setHour} playing={playing} setPlaying={setPlaying} lang={lang} />}
     </section>
   );
 
+  const modals = (
+    <>
+      <StepModal step={modal} t={t} lang={lang} onClose={() => setModal(null)} onJump={openStep} steps={steps}
+        onAnim={modal && animFor(modal.id) ? () => { const k = animFor(modal.id), c = plain(modal, lang); setModal(null); setAnim({ kind: k, caption: c }); } : null} />
+      {anim && <AnimModal kind={anim.kind} caption={anim.caption} lang={lang} onClose={() => setAnim(null)} />}
+      <Lumo result={screen === "home" && mode === "simple" ? null : result} t={t} lang={lang} hour={hour} guide={guide} setGuide={setGuide}
+        visible={lumoVisible} setVisible={setLumoVisible} loadExample={loadExample} running={running} onAction={onLumo}
+        tourReady={mode === "simple" && screen === "answer" && !!result} />
+    </>
+  );
+  const modeSwitch = (
+    <div className="seg" role="group" aria-label={es ? "Nivel de detalle" : "Detail level"}>
+      <button className={mode === "simple" ? "on" : ""} onClick={() => setMode("simple")}>Simple</button>
+      <button className={mode === "tech" ? "on" : ""} onClick={() => setMode("tech")}>{es ? "Técnico" : "Technical"}</button>
+    </div>
+  );
+  const langSwitch = <div className="seg" role="group" aria-label={es ? "Idioma" : "Language"}>{["es", "en"].map((l) => <button key={l} className={lang === l ? "on" : ""} onClick={() => setLang(l)}>{l.toUpperCase()}</button>)}</div>;
+
+  // ---------------- Modo Simple: una pregunta por pantalla
+  if (mode === "simple") return (
+    <div className="simple-shell">
+      <header className="simple-top">
+        <button className="brand-s" onClick={() => setScreen("home")} aria-label={es ? "Volver al inicio" : "Back to start"}><Logo /><b>LUMOX</b></button>
+        <span className="spacer" />
+        {langSwitch}{modeSwitch}
+        <button className="btn" onClick={loadExample}><Ic.book />{es ? "Ver ejemplo" : "See example"}</button>
+      </header>
+      <main className="simple-main" id="main">
+        {error && <div className="errbox" role="alert"><b>{es ? "No pudimos calcular:" : "We couldn't compute:"}</b> {error} <button className="btn" style={{ marginLeft: 8 }} onClick={() => run(spec)}>{es ? "Reintentar" : "Retry"}</button></div>}
+        {screen === "home"
+          ? <Home lang={lang} sites={sites} spec={spec} onStart={startSimple} onExample={loadExample} running={running} />
+          : <Answer r={result} lang={lang} running={running} precomputed={precomputed} hour={hour} setHour={setHour} playing={playing} setPlaying={setPlaying}
+              patch={patch} webgl={webgl} view={view} setView={setView} go={go} spec={spec} steps={steps} order={order} traceId={traceId}
+              onAnim={(k, c) => setAnim({ kind: k, caption: c })} onNew={() => setScreen("home")} openStep={openStep} />}
+      </main>
+      <footer className="simple-foot">{es ? "Datos: NASA/JPL Horizons, NAIF SPICE, LRO LOLA y LROC, NASA SVS. Lumox no es un producto oficial de NASA." : "Data: NASA/JPL Horizons, NAIF SPICE, LRO LOLA and LROC, NASA SVS. Lumox is not an official NASA product."} <a href="https://github.com/anabelgrez/lumox/blob/main/docs/FUENTES.md" target="_blank" rel="noreferrer">{es ? "Fuentes" : "Sources"}</a></footer>
+      {modals}
+    </div>
+  );
+
+  // ---------------- Modo Técnico: todo lo que había
   return (
     <div className="shell">
       <div className="brand"><Logo /><div><b>LUMOX</b><span>Lunar Mission Planner</span></div></div>
@@ -257,10 +320,7 @@ export default function App() {
         {(section === "validation" || section === "sources") && <Validation status={status} result={result} t={t} lang={lang} />}
       </main>
 
-      <StepModal step={modal} t={t} lang={lang} onClose={() => setModal(null)} onJump={openStep} steps={steps}
-        onAnim={modal && animFor(modal.id) ? () => { const k = animFor(modal.id), c = plain(modal, lang); setModal(null); setAnim({ kind: k, caption: c }); } : null} />
-      {anim && <AnimModal kind={anim.kind} caption={anim.caption} lang={lang} onClose={() => setAnim(null)} />}
-      <Lumo result={result} t={t} lang={lang} hour={hour} guide={guide} setGuide={setGuide} visible={lumoVisible} setVisible={setLumoVisible} loadExample={loadExample} running={running} onAction={onLumo} />
+      {modals}
     </div>
   );
 }

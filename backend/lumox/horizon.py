@@ -87,11 +87,14 @@ def elevation_angle(z_terrain: np.ndarray, dist_m: np.ndarray, z_observer: float
 # ---------------------------------------------------------------- DEM access
 
 def list_dems() -> list[dict]:
+    """GeoTIFFs, or PDS3 LOLA products (.lbl label + .img data; GDAL opens the .lbl)."""
     out = []
     if DEM_DIR.exists():
         for p in sorted(DEM_DIR.iterdir()):
-            if p.suffix.lower() in (".tif", ".tiff", ".img"):
+            if p.suffix.lower() in (".tif", ".tiff"):
                 out.append({"file": p.name, "bytes": p.stat().st_size})
+            elif p.suffix.lower() == ".lbl" and p.with_suffix(".img").exists():
+                out.append({"file": p.name, "bytes": p.with_suffix(".img").stat().st_size})
     return out
 
 
@@ -174,9 +177,12 @@ def terrain_horizon(lat: float, lon: float, mast_m: float, site_elev_m: float | 
     sx, sy = tf.transform(lon, lat)
     z_site = site_elev_m
     if z_site is None:
-        z_site = float(next(ds.sample([(sx, sy)]))[0])
-        if ds.nodata is not None and z_site == ds.nodata:
+        raw = float(next(ds.sample([(sx, sy)]))[0])
+        if ds.nodata is not None and raw == ds.nodata:
             raise HorizonError("site falls on DEM nodata")
+        z_site = raw * (float(ds.scales[0]) if ds.scales else 1.0) + (float(ds.offsets[0]) if ds.offsets else 0.0)
+        if z_site > 1.0e6:
+            z_site -= R_MOON.value
     z_obs = z_site + mast_m
 
     lat2, lon2 = destination(lat, lon, az, dist)
@@ -194,6 +200,10 @@ def terrain_horizon(lat: float, lon: float, mast_m: float, site_elev_m: float | 
     scale = float(ds.scales[0]) if ds.scales else 1.0
     offset = float(ds.offsets[0]) if ds.offsets else 0.0
     win = win * scale + offset
+    # LOLA GDR products store planetary RADIUS (offset 1737400 m); convert to height above the sphere.
+    radius_product = bool(np.nanmedian(win) > 1.0e6)
+    if radius_product:
+        win = win - R_MOON.value
     z = np.full(rows.shape, np.nan)
     z[inside] = win[rows[inside] - r0, cols[inside] - c0]
     z = z.reshape(n, dist.size)
@@ -221,7 +231,8 @@ def terrain_horizon(lat: float, lon: float, mast_m: float, site_elev_m: float | 
                 {"name": "N_az", "value": n, "unit": "", "source": HORIZON_AZIMUTH_STEPS.source},
             ],
             {"value": h.elevation, "unit": "deg"},
-            assumptions=["Spherical Moon of radius R for ray geometry; DEM heights relative to that sphere",
+            assumptions=["Spherical Moon of radius R for ray geometry; DEM heights relative to that sphere"
+                         + (" (LOLA radius product: height = radius - R)" if radius_product else ""),
                          "Nearest-pixel sampling of the DEM along each ray", "No refraction (airless)",
                          f"Ray samples outside the DEM ({(1 - cover) * 100:.1f}%) ignored"],
             uncertainty=f"Angular resolution limited by DEM: one pixel ({res:.0f} m) at 1 km subtends "

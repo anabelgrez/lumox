@@ -20,7 +20,7 @@ OUT = Path(__file__).resolve().parents[2] / "frontend" / "public" / "scenarios"
 
 PRESETS = [
     {"id": "example-delay", "label": "Example: 9-day delay at Shackleton", "site_id": "shackleton",
-     "start": "2027-01-15T00:00:00Z", "duration_days": 14, "max_delay_days": 30},
+     "start": "2027-01-24T00:00:00Z", "duration_days": 14, "max_delay_days": 30},
 ]
 
 

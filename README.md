@@ -110,16 +110,18 @@ Run `test.bat` — the numbers below are what the suite measured on 2026-11-15.
 | What | Against | Result |
 |---|---|---|
 | Horizons provider (parsing, epoch alignment, units) | independent single-epoch `TLIST` Horizons queries, Sun and Earth, 10 epochs | max \|ΔAz\| = 0, max \|ΔEl\| = 0, max rel. range diff = 0 (20 samples) |
-| SPICE vs Horizons | 10 epochs, same site | **not measured** — kernels not downloaded yet (`test_spice_against_horizons` skips) |
+| **SPICE (our code) vs Horizons (JPL service)** — independent implementations | 10 epochs, Shackleton rim, Sun and Earth | max \|ΔAz\| = 5.4e-7°, max \|ΔEl\| = 4.4e-8°, max rel. range diff = 9.9e-9 |
 | Disc fraction limits | x = −1, 0, +1 → f = 0, 0.5, 1 | exact (1e-12) analytic; numerical within 2e-3 |
 | Numerical vs analytic disc fraction | 61 elevations across the horizon, flat horizon | max \|Δf\| < 5e-3 |
 | Horizon formula | curvature drop of flat ground; exact vs small-angle at 50 km | agree to < 1e-3 ° |
 | Angular radius of the Sun at 1 AU | 16.0′ | 0.2665° ± 1e-3 |
 | Physical sanity (Shackleton rim, 15 Jan – 14 Feb 2027, 14-day window) | Sun stays within a few degrees of the horizon; Earth oscillates with the ~27-day libration cycle | Sun elevation 0.28…0.67°; Earth elevation −7.00…+6.32° (measured from the exported scenario; the Validation tab shows the loaded one) |
-| Horizon silhouette vs LROC Quickmap | 4 azimuths per site | **not measured** — needs the DEM |
+| Terrain horizon with LOLA `LDEM_80S_80M` (Shackleton rim, mast 2 m) | DEM read through its own polar-stereographic CRS | site height 1730.5 m above the 1737.4 km sphere; horizon 0.00…2.86°; 100 % of ray samples inside the DEM |
+| Margin in metres (Shackleton rim, 24 Jan 2027 + 14 d) | engine | sunlight 15.7 % at 2 m → 67.1 % at 3 m → 95.0 % at 5 m |
+| Horizon silhouette vs LROC Quickmap | 4 azimuths per site | **not measured yet** |
 | Units | pint dimensionality | pass |
 
-Suite status: 20 offline tests pass; 1 network test passes; 1 skipped (SPICE, no kernels).
+Suite status (2026-11-15, kernels and DEM present): **22 passed, 0 skipped** (`test.bat`). A full scenario with margins takes ~60 s with SPICE + DEM (33 horizon recomputations); ~7 s with Horizons cache and flat horizon.
 
 ---
 
@@ -136,7 +138,15 @@ Out of scope: 3D globe, AI chatbot, thermal model, user accounts, mobile app.
 
 ---
 
+## Why we chose each thing
+
+See [docs/decisiones.md](docs/decisiones.md) (Spanish): every design decision with its alternatives and the measured numbers behind it.
+
 ## Front-end
+
+**3D scene (Three.js):** the real DEM patch around the site (24 km, no vertical exaggeration, served by `GET /api/terrain`), the lander with its mast, the Sun as a directional light at its real azimuth/elevation for the selected hour (intensity scaled by the computed visible-disc fraction) and the Earth on the sky. Shadows on the relief come from the real Sun direction. A fixed fill light keeps the terrain readable at night; it is labelled as a visual aid.
+
+**Teaching mode:** every trace step has a plain-language version ("en criollo", `src/plain.js`, templates over the computed numbers), shown in the step modal and under each live step; four animated 2D explainers (horizon angle, disc fraction, battery as a bank account, libration) sit between the panorama and the cards.
 
 Top bar (site, date, duration, mast, autonomy, max gap, language, **See example** = 9-day delay) · 360° horizon panorama with Sun and Earth, hour slider, lunar-day animation, countdown · metric cards and verdict (each number opens its trace step) · **Live calculations** panel with CSV/JSON export · heat map site × date · the three margins · side-by-side comparison · Science / Engineering views with requirements and the agreement zone · rule-based inferences linked to steps · mission calculator on `/api/calc` · shareable link (scenario in the URL) · validation, limits and credits · **Lumo**, an original SVG mascot (lunar module with solar panel and antenna; happy / worried / asleep by verdict) that explains the screen with templates over the numbers and guides the example in 4 steps. Dark lunar theme, amber Sun, blue Earth, green/yellow/red only for the verdict, monospaced numbers, CSS variables, responsive.
 

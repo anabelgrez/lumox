@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 from . import __version__, formulas
 from .energy import Panel, Power
 from .ephemeris import available_providers
-from .horizon import dem_coverage, list_dems
+from .horizon import dem_coverage, list_dems, terrain_patch
 from .scenario import LIMITS, ScenarioSpec, run_scenario
 from .sites import SITES
 from .trace import STORE, Trace
@@ -97,6 +97,24 @@ def sites():
 @app.get("/api/limits")
 def limits():
     return LIMITS
+
+
+@app.get("/api/terrain")
+def terrain(site_id: str | None = None, lat: float | None = None, lon: float | None = None,
+            half_size_m: float = 12000.0, n: int = 97):
+    """Parche de alturas del DEM alrededor del sitio, para la escena 3D (metros locales)."""
+    if lat is None or lon is None:
+        from .sites import get_site
+        try:
+            s = get_site(site_id or "shackleton")
+        except KeyError as e:
+            raise HTTPException(404, str(e))
+        lat, lon = s.lat, s.lon
+    patch = terrain_patch(lat, lon, half_size_m, max(9, min(n, 161)))
+    if patch is None:
+        return {"available": False, "note": "no DEM covers this site; the 3D view shows a flat plane and says so"}
+    patch["available"] = True
+    return patch
 
 
 @app.get("/api/formulas")

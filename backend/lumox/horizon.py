@@ -137,6 +137,54 @@ def dem_coverage(lat: float, lon: float, dem_file: str | None = None) -> dict:
     return {"covered": p is not None, "file": p.name if p else None, "available": list_dems()}
 
 
+# ---------------------------------------------------------------- parche 3D
+
+def terrain_patch(lat: float, lon: float, half_size_m: float = 12_000.0, n: int = 97,
+                  dem_file: str | None = None) -> dict | None:
+    """Grilla de alturas alrededor del sitio, en metros locales (norte/este), para la
+    escena 3D. No es un cálculo nuevo: son las mismas muestras del DEM que usa el
+    horizonte, relativas a la altura del sitio. Devuelve None si no hay DEM."""
+    p = _pick_dem(lat, lon, dem_file)
+    if p is None:
+        return None
+    ds, tf = _open_dem(str(p))
+    scale = float(ds.scales[0]) if ds.scales else 1.0
+    offset = float(ds.offsets[0]) if ds.offsets else 0.0
+    k = np.linspace(-half_size_m, half_size_m, n)
+    north, east = np.meshgrid(k, k, indexing="ij")
+    dist = np.hypot(north, east)
+    az = np.degrees(np.arctan2(east, north)) % 360.0
+    # destination() espera (az[:,None], dist[None,:]); acá lo llamo punto a punto en 1D
+    R = R_MOON.value
+    la1, lo1 = np.radians(lat), np.radians(lon)
+    psi = dist / R; a = np.radians(az)
+    la2 = np.arcsin(np.sin(la1) * np.cos(psi) + np.cos(la1) * np.sin(psi) * np.cos(a))
+    lo2 = lo1 + np.arctan2(np.sin(a) * np.sin(psi) * np.cos(la1), np.cos(psi) - np.sin(la1) * np.sin(la2))
+    x, y = tf.transform(np.degrees(lo2).ravel(), np.degrees(la2).ravel())
+    from rasterio.transform import rowcol
+    rows, cols = rowcol(ds.transform, x, y)
+    rows = np.asarray(rows, dtype=np.int64); cols = np.asarray(cols, dtype=np.int64)
+    inside = (rows >= 0) & (rows < ds.height) & (cols >= 0) & (cols < ds.width)
+    if not inside.any():
+        return None
+    from rasterio.windows import Window
+    r0, r1 = int(rows[inside].min()), int(rows[inside].max()) + 1
+    c0, c1 = int(cols[inside].min()), int(cols[inside].max()) + 1
+    win = ds.read(1, window=Window(c0, r0, c1 - c0, r1 - r0)).astype(np.float64)
+    if ds.nodata is not None:
+        win[win == ds.nodata] = np.nan
+    win = win * scale + offset
+    if np.nanmedian(win) > 1.0e6:
+        win -= R
+    z = np.full(rows.shape, np.nan)
+    z[inside] = win[rows[inside] - r0, cols[inside] - c0]
+    z = z.reshape(n, n)
+    centre = z[n // 2, n // 2]
+    rel = z - centre
+    return {"n": n, "half_size_m": half_size_m, "step_m": float(k[1] - k[0]), "site_z_m": float(centre),
+            "heights_m": np.nan_to_num(rel, nan=0.0).tolist(), "dem": p.name, "resolution_m": float(max(ds.res))}
+
+
 # ---------------------------------------------------------------- horizon
 
 def flat_horizon(site_elev_m: float, mast_m: float, n_az: int | None = None, trace=None,
@@ -187,8 +235,9 @@ def terrain_horizon(lat: float, lon: float, mast_m: float, site_elev_m: float | 
 
     lat2, lon2 = destination(lat, lon, az, dist)
     x, y = tf.transform(lon2.ravel(), lat2.ravel())
-    rows, cols = ds.index(x, y)
-    rows = np.asarray(rows); cols = np.asarray(cols)
+    from rasterio.transform import rowcol
+    rows, cols = rowcol(ds.transform, x, y)
+    rows = np.asarray(rows, dtype=np.int64); cols = np.asarray(cols, dtype=np.int64)
     inside = (rows >= 0) & (rows < ds.height) & (cols >= 0) & (cols < ds.width)
     # Read only the window that the rays touch
     r0, r1 = int(rows[inside].min()), int(rows[inside].max()) + 1

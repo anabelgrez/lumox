@@ -8,7 +8,7 @@ setup:
 	cd frontend && npm install --no-audit --no-fund
 
 backend:
-	$(PY) -m uvicorn lumox.api:app --app-dir backend --port 8000 --reload
+	$(PY) -m uvicorn lumox.api:app --app-dir backend --port 8000 --reload --ws-ping-timeout 300
 
 frontend:
 	cd frontend && npm run dev

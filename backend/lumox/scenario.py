@@ -114,9 +114,13 @@ def run_scenario(spec: ScenarioSpec, trace: Trace | None = None, store: bool = T
             "sun_az": eph.sun_az[sl].tolist(), "sun_el": eph.sun_el[sl].tolist(),
             "earth_az": eph.earth_az[sl].tolist(), "earth_el": eph.earth_el[sl].tolist(),
             "sun_fraction": f_sun.tolist(), "earth_fraction": earth["fraction"][sl].tolist(),
+            # altura del terreno justo debajo de cada cuerpo, para las frases "esa loma lo tapa"
+            "sun_horizon_deg": np.asarray(sun["horizon_at_body_deg"])[sl].tolist(),
+            "earth_horizon_deg": np.asarray(earth["horizon_at_body_deg"])[sl].tolist(),
             "sun_rho_deg": sun["angular_radius_deg"][sl].tolist(), "earth_rho_deg": earth["angular_radius_deg"][sl].tolist(),
             "irradiance_wm2": S.tolist(), "power_w": P.tolist(), "soc_frac": bal["soc_frac"].tolist(),
         },
+        "events": _events(times_ext[sl], f_sun > 0, e_vis),
         "horizon": {"azimuth": horizon.azimuth.tolist(), "elevation": horizon.elevation.tolist(),
                     "distance_m": np.nan_to_num(horizon.distance, nan=-1).tolist()},
         "metrics": {k: v for k, v in metrics.items() if k != "step_ids"},
@@ -132,6 +136,17 @@ def run_scenario(spec: ScenarioSpec, trace: Trace | None = None, store: bool = T
     if store:
         STORE.put(trace)
     return result
+
+
+def _events(times, sun_up, earth_up) -> list[dict]:
+    """Salidas y puestas en la grilla horaria (precisión ±30 min, igual que todo lo demás).
+    El front las usa para la cuenta regresiva desde cualquier hora sin calcular nada."""
+    out = []
+    for body, m in (("sun", sun_up), ("earth", earth_up)):
+        for k in range(1, m.size):
+            if bool(m[k]) != bool(m[k - 1]):
+                out.append({"idx": k, "t": iso_list(times[k:k + 1])[0], "body": body, "rise": bool(m[k])})
+    return sorted(out, key=lambda e: e["idx"])
 
 
 LIMITS = [

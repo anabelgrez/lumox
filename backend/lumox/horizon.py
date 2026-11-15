@@ -98,6 +98,12 @@ def list_dems() -> list[dict]:
     return out
 
 
+# Un dataset de rasterio abierto no se puede leer desde dos hilos a la vez
+# (la API atiende el escenario y el parche 3D en paralelo): serializamos las lecturas.
+import threading
+_DEM_LOCK = threading.RLock()
+
+
 @lru_cache(maxsize=4)
 def _open_dem(path: str):
     import rasterio
@@ -170,7 +176,8 @@ def terrain_patch(lat: float, lon: float, half_size_m: float = 12_000.0, n: int 
     from rasterio.windows import Window
     r0, r1 = int(rows[inside].min()), int(rows[inside].max()) + 1
     c0, c1 = int(cols[inside].min()), int(cols[inside].max()) + 1
-    win = ds.read(1, window=Window(c0, r0, c1 - c0, r1 - r0)).astype(np.float64)
+    with _DEM_LOCK:
+        win = ds.read(1, window=Window(c0, r0, c1 - c0, r1 - r0)).astype(np.float64)
     if ds.nodata is not None:
         win[win == ds.nodata] = np.nan
     win = win * scale + offset
@@ -181,8 +188,15 @@ def terrain_patch(lat: float, lon: float, half_size_m: float = 12_000.0, n: int 
     z = z.reshape(n, n)
     centre = z[n // 2, n // 2]
     rel = z - centre
+    # Para dibujar en un plano local hay que "bajar" lo lejano por la curvatura:
+    # caída = R - sqrt(R² - d²) (≈ d²/2R, unos 41 m a 12 km). Así la escena 3D
+    # y el cálculo del horizonte ven el mismo terreno.
+    drop = R - np.sqrt(np.maximum(R * R - dist * dist, 0.0))
+    local = np.nan_to_num(rel, nan=0.0) - drop
     return {"n": n, "half_size_m": half_size_m, "step_m": float(k[1] - k[0]), "site_z_m": float(centre),
-            "heights_m": np.nan_to_num(rel, nan=0.0).tolist(), "dem": p.name, "resolution_m": float(max(ds.res))}
+            "heights_m": np.nan_to_num(rel, nan=0.0).tolist(), "heights_local_m": local.tolist(),
+            "min_m": float(np.nanmin(rel)), "max_m": float(np.nanmax(rel)),
+            "dem": p.name, "resolution_m": float(max(ds.res))}
 
 
 # ---------------------------------------------------------------- horizon
@@ -210,9 +224,26 @@ def terrain_horizon(lat: float, lon: float, mast_m: float, site_elev_m: float | 
                     dem_file: str | None = None, n_az: int | None = None,
                     max_dist_m: float | None = None, trace=None) -> Horizon:
     """Compute the terrain horizon from a DEM; fall back to flat with a trace notice."""
+    # Los márgenes piden ~33 horizontes sin traza; los guardamos para no recalcular
+    # lo mismo cada vez que cambia la fecha (el relieve no depende de la fecha).
+    key = (round(lat, 7), round(lon, 7), mast_m, site_elev_m, dem_file, n_az, max_dist_m)
+    if trace is None and key in _HCACHE:
+        return _HCACHE[key]
     p = _pick_dem(lat, lon, dem_file)
     if p is None:
         return flat_horizon(site_elev_m or 0.0, mast_m, n_az, trace)
+    h = _terrain_horizon(p, lat, lon, mast_m, site_elev_m, n_az, max_dist_m, trace)
+    if trace is None:
+        if len(_HCACHE) > 400:
+            _HCACHE.clear()
+        _HCACHE[key] = h
+    return h
+
+
+_HCACHE: dict = {}
+
+
+def _terrain_horizon(p, lat, lon, mast_m, site_elev_m, n_az, max_dist_m, trace) -> Horizon:
     ds, tf = _open_dem(str(p))
     n = n_az or int(HORIZON_AZIMUTH_STEPS.value)
     dmax = max_dist_m or HORIZON_MAX_DISTANCE.value
@@ -221,6 +252,27 @@ def terrain_horizon(lat: float, lon: float, mast_m: float, site_elev_m: float | 
     dist = np.arange(step, dmax + step / 2, step)
     az = np.arange(n) * 360.0 / n
 
+    # El horizonte solo depende del relieve, el punto y el mástil: lo guardamos en
+    # disco para que reiniciar el servidor no obligue a recalcular los 33 de los márgenes.
+    import hashlib
+    ck = hashlib.sha256(f"{p.name}|{lat:.7f}|{lon:.7f}|{mast_m}|{site_elev_m}|{n}|{dmax}|v1".encode()).hexdigest()[:24]
+    cf = ROOT / "cache" / "horizon" / f"{ck}.npz"
+    if cf.exists():
+        c = np.load(cf)
+        theta_max, dk = c["theta"], c["dist"]
+        z_site, cover, radius_product = float(c["z_site"]), float(c["cover"]), bool(c["radius_product"])
+    else:
+        with _DEM_LOCK:
+            theta_max, dk, z_site, cover, radius_product = _scan(ds, tf, lat, lon, mast_m, site_elev_m, n, az, dist)
+        cf.parent.mkdir(parents=True, exist_ok=True)
+        np.savez(cf, theta=theta_max, dist=dk, z_site=z_site, cover=cover, radius_product=radius_product)
+    h = Horizon(az, theta_max, dk, f"dem:{p.name}", res, float(z_site), mast_m,
+                notes=[f"{cover * 100:.1f}% of ray samples inside DEM"])
+    return _horizon_step(h, p, res, z_site, site_elev_m, mast_m, dmax, n, cover, radius_product, trace)
+
+
+def _scan(ds, tf, lat, lon, mast_m, site_elev_m, n, az, dist):
+    """Recorre los rayos sobre el DEM y devuelve el ángulo máximo por azimut (grados)."""
     # Site elevation from the DEM unless given
     sx, sy = tf.transform(lon, lat)
     z_site = site_elev_m
@@ -263,8 +315,10 @@ def terrain_horizon(lat: float, lon: float, mast_m: float, site_elev_m: float | 
     theta_max = theta[np.arange(n), k]
     theta_max = np.where(np.isfinite(theta_max), theta_max, 0.0)
     cover = float(np.mean(inside))
-    h = Horizon(az, theta_max, dist[k], f"dem:{p.name}", res, float(z_site), mast_m,
-                notes=[f"{cover * 100:.1f}% of ray samples inside DEM"])
+    return theta_max, dist[k], float(z_site), cover, radius_product
+
+
+def _horizon_step(h, p, res, z_site, site_elev_m, mast_m, dmax, n, cover, radius_product, trace):
     if trace is not None:
         s = trace.add(
             "horizon", "Terrain horizon from LOLA DEM",

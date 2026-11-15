@@ -12,7 +12,7 @@ if not exist "%ROOT%frontend\node_modules" (
   echo [lumox] installing frontend dependencies...
   pushd "%ROOT%frontend" && call npm install --no-audit --no-fund && popd
 )
-start "lumox-backend" cmd /k ""%ROOT%.venv\Scripts\python.exe" -m uvicorn lumox.api:app --app-dir "%ROOT%backend" --port 8000 --reload"
+start "lumox-backend" cmd /k ""%ROOT%.venv\Scripts\python.exe" -m uvicorn lumox.api:app --app-dir "%ROOT%backend" --port 8000 --reload --ws-ping-timeout 300"
 start "lumox-frontend" cmd /k "cd /d "%ROOT%frontend" && npm run dev"
 echo [lumox] backend  http://localhost:8000/docs
 echo [lumox] frontend http://localhost:5173

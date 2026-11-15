@@ -1,0 +1,32 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Heavy data: kernels, DEMs, caches (never committed)
+data/kernels/
+data/dem/
+data/cache/
+*.bsp
+*.bpc
+*.tpc
+*.tls
+*.tif
+*.tiff
+*.img
+*.lbl
+
+# Exported scenarios are generated; keep the folder, not the files
+frontend/public/scenarios/*.json
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

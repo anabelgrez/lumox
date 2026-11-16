@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, decodeSpec, encodeSpec, getFeatures, getJSON, getTerrain, getTerrainFine, runScenario } from "./api.js";
+import { api, decodeSpec, encodeSpec, getFeatures, getJSON, getTerrain, getTerrainFine, runScenario, STATIC } from "./api.js";
 import { Answer, Home } from "./SimpleView.jsx";
 import CalcCard from "./CalcCard.jsx";
 import { T } from "./i18n.js";
@@ -333,7 +333,7 @@ export default function App() {
         <div className="foot">
           {es ? "Planificar · Analizar · Explorar" : "Plan · Analyse · Explore"}
           <div className="sb-status">
-            <div><span className={"dot " + (status ? "ok" : "bad")} /> {status ? (es ? "Motor en vivo" : "Engine live") : (es ? "Motor sin conexión" : "Engine offline")}</div>
+            <div><span className={"dot " + (STATIC ? "warn" : status ? "ok" : "bad")} /> {STATIC ? (es ? "Demo con datos simulados" : "Demo with simulated data") : status ? (es ? "Motor en vivo" : "Engine live") : (es ? "Motor sin conexión" : "Engine offline")}</div>
             {status && <div className="num">{status.ephemeris.spice.available ? "SPICE" : "Horizons"} · DEM {status.dems.length}</div>}
             {site && !site.verified && <div className="warn">{es ? "Coordenadas sin reverificar" : "Coordinates not re-verified"}</div>}
           </div>

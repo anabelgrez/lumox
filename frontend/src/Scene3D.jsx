@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { fineShift, sample } from "./geo.js";
+import { assetUrl } from "./api.js";
 
 // Escena 3D de Lumox. La vista principal es en primera persona: alguien parado junto al módulo, con la
 // cámara a la altura del mástil elegido, sobre el relieve LOLA real. Todo lo que tiene una posición sale
@@ -26,7 +27,7 @@ const norm360 = (x) => ((x % 360) + 360) % 360;
 
 // ---------- recursos compartidos (se cargan una sola vez)
 let _lm;
-const loadLander = () => (_lm ??= new Promise((res) => new GLTFLoader().load("/assets/nasa/apollo_lunar_module.glb", (g) => res(g.scene), undefined, () => res(null))));
+const loadLander = () => (_lm ??= new Promise((res) => new GLTFLoader().load(assetUrl("assets/nasa/apollo_lunar_module.glb"), (g) => res(g.scene), undefined, () => res(null))));
 let _glow, _detail;
 function glowTex() {
   if (_glow) return _glow;
@@ -134,7 +135,7 @@ const Scene3D = forwardRef(function Scene3D({ patch, fine, result, hour, lang, f
     const fill = new THREE.HemisphereLight(0x8fa0c4, 0x2a2d36, 0.9); scene.add(fill);
     const sunBall = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 24), new THREE.MeshBasicMaterial({ color: 0xffe2a0 }));
     const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xffc46b, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); sunBall.add(glow);
-    const eTex = new THREE.TextureLoader().load("/assets/nasa/earth_blue_marble_5400.jpg", () => { S.dirty = true; }); eTex.colorSpace = THREE.SRGBColorSpace;
+    const eTex = new THREE.TextureLoader().load(assetUrl("assets/nasa/earth_blue_marble_5400.jpg"), () => { S.dirty = true; }); eTex.colorSpace = THREE.SRGBColorSpace;
     const eMat = earthMat(eTex);
     const earthBall = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 48), eMat);
     scene.add(sunBall, earthBall);
@@ -146,8 +147,8 @@ const Scene3D = forwardRef(function Scene3D({ patch, fine, result, hour, lang, f
     // Luna de contexto (NASA SVS CGI Moon Kit) en un recuadro
     const ctxScene = new THREE.Scene(), ctxCam = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
     const tl = new THREE.TextureLoader();
-    const mTex = tl.load("/assets/nasa/lroc_color_2k.jpg", () => { S.dirty = true; }); mTex.colorSpace = THREE.SRGBColorSpace;
-    const moon = new THREE.Mesh(new THREE.SphereGeometry(1, 96, 96), new THREE.MeshStandardMaterial({ map: mTex, displacementMap: tl.load("/assets/nasa/ldem_3_8bit.jpg"), displacementScale: 0.02, roughness: 1 }));
+    const mTex = tl.load(assetUrl("assets/nasa/lroc_color_2k.jpg"), () => { S.dirty = true; }); mTex.colorSpace = THREE.SRGBColorSpace;
+    const moon = new THREE.Mesh(new THREE.SphereGeometry(1, 96, 96), new THREE.MeshStandardMaterial({ map: mTex, displacementMap: tl.load(assetUrl("assets/nasa/ldem_3_8bit.jpg")), displacementScale: 0.02, roughness: 1 }));
     const pin = new THREE.Mesh(new THREE.SphereGeometry(0.035, 12, 12), new THREE.MeshBasicMaterial({ color: 0xe3a24a })); moon.add(pin);
     const ctxSun = new THREE.DirectionalLight(0xffffff, 2.2); ctxScene.add(moon, new THREE.AmbientLight(0xffffff, 0.25), ctxSun);
     ctxCam.up.set(0, 0, -1);

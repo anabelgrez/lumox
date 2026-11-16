@@ -1,168 +1,39 @@
-# Lumox v2
+## Live demo · Demo en vivo
 
-**If a south-pole Moon landing slips, how much margin is left?**
-Lumox answers in days, in metres of mast and in kilometres of ground — before the lander runs out of sunlight or loses line of sight to Earth.
+**https://anabelgrez.github.io/lumox/**
 
-NASA Space Apps Challenge 2026 · Santiago del Estero · Team *Lunáticos* · Challenge *Lunar Landing Site Navigator*.
+> ⚠️ **EN:** This GitHub Pages demo is **static** and runs on **simulated, precomputed data**.
+> It does not run the calculation engine; it shows exported scenarios. For real-time
+> calculation with JPL Horizons ephemerides, run it locally (`dev.bat`, or `make setup && make dev`).
+>
+> ⚠️ **ES:** Esta demo en GitHub Pages es **estática** y usa **datos simulados y precalculados**.
+> No ejecuta el motor de cálculo; muestra escenarios ya exportados. Para el cálculo en
+> tiempo real con efemérides de JPL Horizons, ejecútalo en local (`dev.bat`, o `make setup && make dev`).
 
-- One calculation engine (Python). The front-end computes nothing: every number on screen comes from the backend with a **trace** (formula, inputs with units and sources, result, assumptions, uncertainty, dependencies) that scientists and engineers can open, follow and export.
-- Real data only: JPL Horizons or NAIF SPICE kernels for the Sun and the Earth, LOLA DEMs for the terrain. If a dataset is missing, the screen says so; nothing is filled in.
+### What is Lumox? · ¿Qué es Lumox?
 
----
+**EN:** If a south-pole Moon landing slips, how much margin is left before the lander runs out
+of sunlight or loses line of sight to Earth? Lumox answers in days, metres of mast and
+kilometres of ground. Every number comes with a trace (formula, inputs with units and sources,
+assumptions, uncertainty) that can be reviewed and exported.
 
-## Architecture
+**ES:** Si un alunizaje en el polo sur lunar se retrasa, ¿cuánto margen queda antes de que el
+módulo se quede sin luz solar o pierda la línea de vista con la Tierra? Lumox responde en días,
+metros de mástil y kilómetros de terreno. Cada número trae su traza (fórmula, entradas con
+unidades y fuentes, supuestos e incertidumbre) para revisarla y exportarla.
 
-```
-lumox-v2/
-├── backend/            Python 3.11+ · FastAPI · NumPy · pint · spiceypy · rasterio · pyproj · pytest
-│   ├── lumox/
-│   │   ├── constants.py      every constant with value, unit and source (single place)
-│   │   ├── units.py          pint registry + dimensional checks
-│   │   ├── trace.py          Step / Trace, live listeners, CSV/JSON export
-│   │   ├── ephemeris/        horizons.py (HTTP, disk cache) · spice.py (NAIF kernels, MOON_ME, LT+S)
-│   │   ├── horizon.py        terrain horizon from a LOLA DEM, exact on the sphere; flat fallback (declared)
-│   │   ├── visibility.py     angular radius, numerical disc fraction + analytic segment check
-│   │   ├── energy.py         irradiance, panel power, hourly energy balance
-│   │   ├── metrics.py        sunlight %, longest night, Earth %, longest gap, countdown, verdict
-│   │   ├── margins.py        margin in days / metres / kilometres
-│   │   ├── scenario.py       orchestration: one call → results + one trace
-│   │   ├── formulas.py       formula catalogue for the mission calculator
-│   │   ├── api.py            REST + WebSocket
-│   │   └── export.py         static JSON for the demo fallback
-│   └── tests/
-├── frontend/           Vite + React 19 (same stack as the reference). Display only.
-├── data/               kernels/, dem/, cache/ — real data, outside git
-├── referencia/         the previous "lunar-navigator" app (zip from ideas/), untouched, used as reference
-├── scripts/download_data.py   downloads the real data (only with explicit flags)
-├── dev.bat · test.bat · export.bat · Makefile
-└── README.md
-```
+### Tech stack · Tecnologías
 
-### Data flow
-
-`site + date + mission parameters` → **ephemeris** (az/el/range of Sun and Earth, hourly) → **terrain horizon** θ(A) → **visible disc fraction** f(t) for Sun and Earth → **irradiance / power / energy balance** → **metrics** → **verdict** → **margins**. Every arrow is a trace step; the WebSocket streams them as they are computed.
-
----
-
-## How to run
-
-Requirements: Python 3.11+, Node.js 20+. Windows: `dev.bat`. Unix: `make setup && make dev`.
-
-```
-dev.bat                 # installs on first run; backend on :8000, frontend on :5173
-test.bat                # pytest, including JPL Horizons validation (network)
-test.bat offline        # pytest without network tests
-export.bat              # precompute preset scenarios → frontend/public/scenarios/ (demo fallback)
-```
-
-Backend API docs: http://localhost:8000/docs
-
-| Endpoint | What |
-|---|---|
-| `POST /api/scenario` | results + `trace_id` |
-| `GET /api/trace/{id}?format=json\|csv&full=1` | the full trace, exportable |
-| `WS /ws/scenario` | send the spec; receive each step live, then the result |
-| `POST /api/calc/{formula}` | mission calculator: any engine formula with your inputs; optional `trace_id` saves it in the scenario trace |
-| `GET /api/formulas` | catalogue of formulas, variables, units, sources |
-| `GET /api/sites`, `/api/status`, `/api/limits` | sites, data availability, declared limits |
-
-If the backend does not answer, the front-end loads the precomputed JSON and labels it **"precomputed data"**.
-
-### Real data (downloaded only when you ask)
-
-```
-python scripts/download_data.py --list
-python scripts/download_data.py --kernels     # NAIF: naif0012.tls, pck00011.tpc, de440s.bsp, moon_pa_de440_200625.bpc, moon_de440_250416.tf  (45.7 MB)
-python scripts/download_data.py --dem 80m     # LOLA LDEM_80S_80M (south pole, 80 m/px, 115.5 MB)
-python scripts/download_data.py --dem 20m     # LOLA LDEM_80S_20M (1.85 GB)
-```
-
-- Without kernels the engine uses the **JPL Horizons API** (cached on disk) — same physics source (DE ephemeris, lunar libration, light time + aberration, airless).
-- Without a DEM the horizon is **flat (θ = 0)** and every screen says so; sunlight %, Earth visibility and night length are then optimistic. The margins in metres and kilometres need the DEM to vary.
-
----
-
-## Sources and formulas
-
-| Quantity | Formula | Source / method |
+| | EN | ES |
 |---|---|---|
-| Sun / Earth position | `spkcpo(body, t, MOON_ME, LT+S, observer)` → ENU → azimuth, elevation | NAIF SPICE, DE440, lunar PA/ME frames; or Horizons `QUANTITIES=4,20`, `APPARENT=AIRLESS`, `CENTER=coord@301` |
-| Terrain elevation angle | θ(d) = atan2(r_t cos ψ − r_o, r_t sin ψ), ψ = d/R, r_t = R + z_t, r_o = R + z_s + h; horizon = max over d ≤ 150 km, 360 azimuths | exact on the sphere, R = 1 737 400 m (IAU 2015); LOLA GDR read through its own projection (pyproj/rasterio) |
-| Angular radius | ρ = asin(R_b / Δ) | R_sun 695 700 km (IAU 2015 B3), R_earth 6 371.0088 km |
-| Visible disc fraction | numerical integration of the disc against θ(A); check: f = [arccos(−x) + x√(1−x²)]/π, x = (h − θ)/ρ | uniform disc (limb darkening ignored) |
-| Irradiance | S = S₀ (AU / r)² | S₀ = 1361 W/m² (Kopp & Lean 2011), AU IAU 2012 |
-| Panel power | P = S · A · η · cos i · f | i = 0 tracking, else cos i = max(0, n̂·ŝ) |
-| Energy balance | E_{k+1} = clip(E_k + (P_k − P_load) Δt, 0, C) | constant load, 100 % efficiency |
-| Metrics | sunlight % = share of hours with f > 0; longest night; Earth %; longest gap; countdown | Δt = 1 h |
-| Verdict | survives if T_night ≤ T_aut and T_gap ≤ T_gap,max; marginal within 10 % | compares numbers, does not simulate the battery |
-| Margin in days | consecutive whole-day delays that stay viable; best 3 alternatives | daily scan over 30 days |
-| Margin in metres | horizon recomputed for mast 2…10 m | needs DEM |
-| Margin in kilometres | 5 × 5 grid at 2 km; horizon recomputed per point; centre ephemeris reused (parallax ≤ 9e-4° for Earth) | needs DEM |
+| **Frontend** (display only) | React 19, Vite 7: interface and build. Three.js: 3D view of terrain, Moon and lander. NASA textures and 3D model (LROC, LOLA, Blue Marble, Apollo LM). | React 19, Vite 7: interfaz y compilación. Three.js: vista 3D del terreno, la Luna y el módulo. Texturas y modelo 3D de NASA (LROC, LOLA, Blue Marble, Apollo LM). |
+| **Backend** (local only) | Python 3.11+, FastAPI, Uvicorn: REST API and live WebSocket. NumPy: numerics. pint: units. spiceypy (NAIF SPICE): Sun and Earth positions. rasterio, pyproj: LOLA elevation models and projections. pytest: tests. | Python 3.11+, FastAPI, Uvicorn: API REST y WebSocket en vivo. NumPy: cálculo. pint: unidades. spiceypy (NAIF SPICE): posiciones del Sol y la Tierra. rasterio, pyproj: modelos de elevación LOLA y proyecciones. pytest: pruebas. |
+| **Data & APIs** | JPL Horizons API (disk-cached ephemerides), NAIF SPICE kernels (DE440, lunar libration), LOLA DEMs (NASA). | API JPL Horizons (efemérides con caché en disco), kernels NAIF SPICE (DE440, libración lunar), DEMs LOLA (NASA). |
 
-All constants live in `backend/lumox/constants.py` with their source. All arithmetic is float64; inputs to the calculator are checked with pint.
+### Backend API · API del backend
+`POST /api/scenario` · `GET /api/trace/{id}` · `WS /ws/scenario` · `POST /api/calc/{formula}` ·
+`GET /api/formulas` · `GET /api/sites` · `GET /api/status`. Docs at / Documentación en `/docs`.
 
----
-
-## Validation (measured)
-
-Run `test.bat` — the numbers below are what the suite measured on 2026-11-15.
-
-| What | Against | Result |
-|---|---|---|
-| Horizons provider (parsing, epoch alignment, units) | independent single-epoch `TLIST` Horizons queries, Sun and Earth, 10 epochs | max \|ΔAz\| = 0, max \|ΔEl\| = 0, max rel. range diff = 0 (20 samples) |
-| **SPICE (our code) vs Horizons (JPL service)** — independent implementations | 10 epochs, Shackleton rim, Sun and Earth | max \|ΔAz\| = 5.4e-7°, max \|ΔEl\| = 4.4e-8°, max rel. range diff = 9.9e-9 |
-| Disc fraction limits | x = −1, 0, +1 → f = 0, 0.5, 1 | exact (1e-12) analytic; numerical within 2e-3 |
-| Numerical vs analytic disc fraction | 61 elevations across the horizon, flat horizon | max \|Δf\| < 5e-3 |
-| Horizon formula | curvature drop of flat ground; exact vs small-angle at 50 km | agree to < 1e-3 ° |
-| Angular radius of the Sun at 1 AU | 16.0′ | 0.2665° ± 1e-3 |
-| Physical sanity (Shackleton rim, 15 Jan – 14 Feb 2027, 14-day window) | Sun stays within a few degrees of the horizon; Earth oscillates with the ~27-day libration cycle | Sun elevation 0.28…0.67°; Earth elevation −7.00…+6.32° (measured from the exported scenario; the Validation tab shows the loaded one) |
-| Terrain horizon with LOLA `LDEM_80S_80M` (Shackleton rim, mast 2 m) | DEM read through its own polar-stereographic CRS | site height 1730.5 m above the 1737.4 km sphere; horizon 0.00…2.86°; 100 % of ray samples inside the DEM |
-| Margin in metres (Shackleton rim, 24 Jan 2027 + 14 d) | engine | sunlight 15.7 % at 2 m → 67.1 % at 3 m → 95.0 % at 5 m |
-| Horizon silhouette vs LROC Quickmap | 4 azimuths per site | **not measured yet** |
-| Units | pint dimensionality | pass |
-
-Suite status (2026-11-15, kernels and DEM present): **22 passed, 0 skipped** (`test.bat`). A full scenario with margins takes ~60 s with SPICE + DEM (33 horizon recomputations); ~7 s with Horizons cache and flat horizon.
-
----
-
-## Limits (declared on screen too)
-
-- "Viable" is geometry: sunlight and line of sight. No thermal model, no antenna model, no detailed power system.
-- 1-hour step: events are resolved to ± 30 min.
-- DEM resolution bounds the horizon; an unresolved boulder can hide the Sun. Without a DEM the horizon is flat and the result optimistic.
-- Limb darkening ignored; panel efficiency constant.
-- Site coordinates marked *not re-verified* come from press or approximate sources; the UI flags them.
-- Not an official NASA tool. No NASA logo or copyrighted material is used.
-
-Out of scope: 3D globe, AI chatbot, thermal model, user accounts, mobile app.
-
----
-
-## Credits for external assets
-
-Visual-only assets (they never change a number): LRO/LROC colour map and LOLA elevation map from NASA's Scientific Visualization Studio CGI Moon Kit (Ernie Wright, [svs.gsfc.nasa.gov/4720](https://svs.gsfc.nasa.gov/4720)); Blue Marble Next Generation, NASA Earth Observatory / Reto Stöckli ([Visible Earth 73909](https://visibleearth.nasa.gov/images/73909)); Apollo Lunar Module model, [NASA 3D Resources](https://science.nasa.gov/3d-resources/apollo-lunar-module/) (illustrative); LOLA 5 m/px site DEMs, Barker et al. 2021, [PGDA product 78](https://pgda.gsfc.nasa.gov/products/78). Full list with licences in [docs/FUENTES.md](docs/FUENTES.md). No NASA logo or insignia is used; Lumox is not an official NASA product.
-
-## Documentation (Spanish)
-
-- [docs/DECISIONES.md](docs/DECISIONES.md) — why we chose each thing, and what we discarded.
-- [docs/COMO_FUNCIONA.md](docs/COMO_FUNCIONA.md) — for non-programmers, with an end-to-end numeric example.
-- [docs/VERIFICACION.md](docs/VERIFICACION.md) — audit table: each calculation, how it was verified, measured result, date, and a "Reviewed by" column left for a team member.
-- [docs/USO_DE_IA.md](docs/USO_DE_IA.md) — which AI tools were used and for what.
-- [docs/FUENTES.md](docs/FUENTES.md) — every external resource, link, licence and use.
-- [docs/capturas/](docs/capturas) — before/after screenshots of the redesign.
-
-## Front-end
-
-**3D scene (Three.js):** the real DEM patch around the site (24 km, no vertical exaggeration, served by `GET /api/terrain`), the lander with its mast, the Sun as a directional light at its real azimuth/elevation for the selected hour (intensity scaled by the computed visible-disc fraction) and the Earth on the sky. Shadows on the relief come from the real Sun direction. A fixed fill light keeps the terrain readable at night; it is labelled as a visual aid.
-
-**Teaching mode:** every trace step has a plain-language version ("en criollo", `src/plain.js`, templates over the computed numbers), shown in the step modal and under each live step; four animated 2D explainers (horizon angle, disc fraction, battery as a bank account, libration) sit between the panorama and the cards.
-
-Top bar (site, date, duration, mast, autonomy, max gap, language, **See example** = 9-day delay) · 360° horizon panorama with Sun and Earth, hour slider, lunar-day animation, countdown · metric cards and verdict (each number opens its trace step) · **Live calculations** panel with CSV/JSON export · heat map site × date · the three margins · side-by-side comparison · Science / Engineering views with requirements and the agreement zone · rule-based inferences linked to steps · mission calculator on `/api/calc` · shareable link (scenario in the URL) · validation, limits and credits · **Lumo**, an original SVG mascot (lunar module with solar panel and antenna; happy / worried / asleep by verdict) that explains the screen with templates over the numbers and guides the example in 4 steps. Dark lunar theme, amber Sun, blue Earth, green/yellow/red only for the verdict, monospaced numbers, CSS variables, responsive.
-
-## Use of AI
-
-This repository was written with Claude (Anthropic) working as a coding assistant under the team's direction, from the team's specification (`referencia/` and the MoonWindow/Lumox idea documents). The application itself contains no language model: inferences are fixed rules and Lumo's sentences are templates over computed values. All physics, constants and data sources are cited above and inside each trace step.
-
-## Credits
-
-JPL Horizons (NASA/JPL SSD) · NAIF SPICE toolkit and generic kernels · LOLA (LRO) DEMs, PDS Geosciences Node · LROC Quickmap (ASU) · IAU 2015 nominal radii · Kopp & Lean (2011) total solar irradiance.
+### Status · Estado
+**EN:** Presented as a **demo** on GitHub Pages. NASA Space Apps Challenge 2026 · Santiago del Estero · Team *Lunáticos* · Challenge *Lunar Landing Site Navigator*.
+**ES:** Presentado como **demo** en GitHub Pages. NASA Space Apps Challenge 2026 · Santiago del Estero · Equipo *Lunáticos* · Reto *Lunar Landing Site Navigator*.

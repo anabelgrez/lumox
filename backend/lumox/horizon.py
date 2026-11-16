@@ -213,8 +213,12 @@ def terrain_patch(lat: float, lon: float, half_size_m: float = 12_000.0, n: int 
     # y el cálculo del horizonte ven el mismo terreno.
     drop = R - np.sqrt(np.maximum(R * R - dist * dist, 0.0))
     local = np.nan_to_num(rel, nan=0.0) - drop
+    # latitud y longitud de cada nodo (para mostrar las coordenadas bajo el cursor sin calcular nada en el front)
+    lat_g = np.round(np.degrees(la2), 5).reshape(n, n)
+    lon_g = np.round((np.degrees(lo2) + 180.0) % 360.0 - 180.0, 5).reshape(n, n)
     return {"n": n, "half_size_m": half_size_m, "step_m": float(k[1] - k[0]), "site_z_m": float(centre),
-            "heights_m": np.nan_to_num(rel, nan=0.0).tolist(), "heights_local_m": local.tolist(),
+            "lat_deg": lat_g.tolist(), "lon_deg": lon_g.tolist(),
+            "heights_m": np.round(np.nan_to_num(rel, nan=0.0), 2).tolist(), "heights_local_m": np.round(local, 2).tolist(),
             "min_m": float(np.nanmin(rel)), "max_m": float(np.nanmax(rel)),
             "dem": p.name, "resolution_m": float(max(ds.res)), "fine": fine,
             "visual_only": fine}

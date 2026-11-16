@@ -90,6 +90,42 @@ def _parse(text: str, expected: int) -> np.ndarray:
     return np.array(rows, dtype=np.float64)
 
 
+LOG_DIR = ROOT / "logs"
+RETRY_WAITS = (2.0, 6.0, 15.0)      # segundos de espera antes de cada reintento
+
+
+def _log_error(kind: str, detail: str) -> None:
+    """Deja el error REAL en data/logs/horizons_errors.log (fecha, tipo, detalle), para no adivinar la causa."""
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        from datetime import datetime, timezone
+        with open(LOG_DIR / "horizons_errors.log", "a", encoding="utf-8") as f:
+            f.write(f"{datetime.now(timezone.utc).isoformat()}\t{kind}\t{detail[:600]}\n")
+    except OSError:
+        pass
+
+
+def get_text(params: dict, timeout: float = 90.0) -> str:
+    """GET a Horizons con reintentos y espera creciente. Horizons responde 503/429 cuando está ocupado y a
+    veces corta la conexión: son fallas pasajeras. Cada intento fallido queda registrado con su causa."""
+    last = None
+    for attempt in range(len(RETRY_WAITS) + 1):
+        with _LOCK:
+            try:
+                r = httpx.get(ENDPOINT, params=params, timeout=timeout)
+                if r.status_code == 200:
+                    return r.text
+                last = f"HTTP {r.status_code}: {r.text[:200]!r}"
+                _log_error(f"http_{r.status_code}", f"intento {attempt + 1}: {last}")
+            except httpx.HTTPError as e:
+                last = f"{type(e).__name__}: {e}"
+                _log_error(type(e).__name__, f"intento {attempt + 1}: {last}")
+        if attempt < len(RETRY_WAITS):
+            import time
+            time.sleep(RETRY_WAITS[attempt])
+    raise EphemerisError(f"Horizons no respondió tras {len(RETRY_WAITS) + 1} intentos: {last}")
+
+
 def fetch_table(body: str, lat: float, lon: float, alt_m: float, times: np.ndarray,
                 timeout: float = 90.0) -> tuple[np.ndarray, str]:
     """Devuelve (array[n,4]: t_unix, az, el, range_km) y de dónde salió: 'cache' o 'network'.
@@ -102,14 +138,8 @@ def fetch_table(body: str, lat: float, lon: float, alt_m: float, times: np.ndarr
     if path.exists():
         return np.array(json.loads(path.read_text())["rows"], dtype=np.float64), "cache"
     url = ENDPOINT + "?" + "&".join(f"{k}={httpx.QueryParams({'v': _quote(k, v)})['v']}" for k, v in q.items())
-    with _LOCK:
-        try:
-            r = httpx.get(ENDPOINT, params={k: _quote(k, v) for k, v in q.items()}, timeout=timeout)
-        except httpx.HTTPError as e:
-            raise EphemerisError(f"Horizons request failed: {e}") from e
-    if r.status_code != 200:
-        raise EphemerisError(f"Horizons HTTP {r.status_code}")
-    arr = _parse(r.text, times.size)
+    text = get_text({k: _quote(k, v) for k, v in q.items()}, timeout)
+    arr = _parse(text, times.size)
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"query": q, "url": url, "rows": arr.tolist()}))
     return arr, "network"

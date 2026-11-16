@@ -54,18 +54,43 @@ def disc_fraction(az_deg: np.ndarray, el_deg: np.ndarray, rho_deg: np.ndarray, h
     az = np.asarray(az_deg, dtype=np.float64)[:, None]
     el = np.asarray(el_deg, dtype=np.float64)[:, None]
     rho = np.asarray(rho_deg, dtype=np.float64)[:, None]
-    # quick exits: fully above / fully below the horizon range of the whole profile
-    th_min, th_max = float(horizon.elevation.min()), float(horizon.elevation.max())
     out = np.empty(az.shape[0])
-    sample_el = el + rho * v[None, :]
-    cos_h = np.cos(np.radians(el))
-    sample_az = az + rho * u[None, :] / np.maximum(cos_h, 1e-9)
-    theta = horizon.at(sample_az.ravel()).reshape(sample_az.shape)
-    out[:] = np.sum((sample_el > theta) * w, axis=1)
-    # exact extremes to avoid sampling noise
-    out[(el - rho).ravel() > th_max] = 1.0
-    out[(el + rho).ravel() < th_min] = 0.0
+    cos_h = np.maximum(np.cos(np.radians(el)), 1e-9)
+    # Atajo exacto: el horizonte es lineal entre muestras, así que su máximo y su mínimo en la ventana de
+    # azimut que cubre el disco están en los extremos de la ventana o en una muestra interior. Si el disco
+    # queda entero por encima del máximo (f = 1) o entero por debajo del mínimo (f = 0), el resultado es
+    # exactamente ese: la integración solo se hace en las horas ambiguas (mismo resultado, mucho más rápido).
+    lo, hi = _window_bounds(horizon, az.ravel(), (rho / cos_h).ravel())
+    above = (el - rho).ravel() > hi
+    below = (el + rho).ravel() < lo
+    out[above] = 1.0
+    out[below] = 0.0
+    todo = np.where(~(above | below))[0]
+    if todo.size:
+        t_az, t_el, t_rho, t_cos = az[todo], el[todo], rho[todo], cos_h[todo]
+        sample_el = t_el + t_rho * v[None, :]
+        sample_az = t_az + t_rho * u[None, :] / t_cos
+        theta = horizon.at(sample_az.ravel()).reshape(sample_az.shape)
+        out[todo] = np.sum((sample_el > theta) * w, axis=1)
     return out
+
+
+def _window_bounds(horizon: Horizon, az: np.ndarray, half_w: np.ndarray):
+    """Mínimo y máximo del horizonte (lineal a tramos, periódico) en [az − half_w, az + half_w]."""
+    n = horizon.azimuth.size
+    g = 360.0 / n
+    a0, a1 = az - half_w, az + half_w
+    lo = np.minimum(horizon.at(a0), horizon.at(a1))
+    hi = np.maximum(horizon.at(a0), horizon.at(a1))
+    i0 = np.ceil(a0 / g).astype(int)
+    m = int(np.max(np.floor(a1 / g) - i0)) + 1 if az.size else 0
+    for k in range(max(m, 0) + 1):
+        idx = i0 + k
+        inside = idx * g <= a1
+        v = horizon.elevation[idx % n]
+        lo = np.where(inside, np.minimum(lo, v), lo)
+        hi = np.where(inside, np.maximum(hi, v), hi)
+    return lo, hi
 
 
 def body_visibility(name: str, az, el, rng, body_radius_m: float, horizon: Horizon, trace=None,

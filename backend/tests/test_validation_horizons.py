@@ -29,11 +29,11 @@ def _raw_horizons(body, epoch):
          "CENTER": "coord@301", "COORD_TYPE": "GEODETIC",
          "SITE_COORD": f"{(SITE['lon'] % 360):.6f},{SITE['lat']:.6f},0.000000",
          "QUANTITIES": "4,20", "TLIST": epoch.replace("T", " ").replace("-", "-"), "TIME_TYPE": "UT"}
-    r = httpx.get(horizons.ENDPOINT, params={k: (v if k == "format" else f"'{v}'") for k, v in q.items()}, timeout=90)
-    r.raise_for_status()
-    a, b = r.text.find("$$SOE"), r.text.find("$$EOE")
-    assert a > 0 and b > 0, r.text[-300:]
-    line = r.text[a + 5:b].strip().splitlines()[0]
+    # mismo camino que el motor: reintentos con espera y el error real en data/logs/horizons_errors.log
+    text = horizons.get_text({k: (v if k == "format" else f"'{v}'") for k, v in q.items()})
+    a, b = text.find("$$SOE"), text.find("$$EOE")
+    assert a > 0 and b > 0, text[-300:]
+    line = text[a + 5:b].strip().splitlines()[0]
     vals = [float(s) for s in [p.strip() for p in line.split(",")][1:]
             if s not in ("", "*") and not re.fullmatch(r"[A-Za-z]", s)]
     return vals[0], vals[1], vals[2] * 1000.0

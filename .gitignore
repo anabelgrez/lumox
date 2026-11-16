@@ -31,3 +31,4 @@ frontend/public/scenarios/*.json
 .idea/
 .DS_Store
 Thumbs.db
+data/features/

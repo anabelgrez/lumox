@@ -1,9 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Ic } from "./icons.jsx";
-import Scene3D from "./Scene3D.jsx";
-import { PanoramaSvg } from "./Panorama.jsx";
-import ZenithMap from "./ZenithMap.jsx";
-import Timeline from "./Timeline.jsx";
 import TraceTable from "./TraceTable.jsx";
 
 // Modo Simple: una pregunta por pantalla y lo importante primero.
@@ -168,7 +164,7 @@ function MarginActions({ r, lang, go, spec }) {
 }
 
 // ---------------------------------------------------------------- Respuesta
-export function Answer({ r, lang, running, precomputed, hour, setHour, playing, setPlaying, patch, webgl, view, setView, go, spec, steps, order, traceId, onAnim, onNew, openStep }) {
+export function Answer({ r, lang, running, precomputed, hour, setHour, playing, setPlaying, patch, webgl, view, setView, go, spec, steps, order, traceId, onAnim, onNew, openStep, renderViewer }) {
   const es = lang === "es";
   const [detail, setDetail] = useState(false);
   const [how, setHow] = useState(false);
@@ -238,14 +234,7 @@ export function Answer({ r, lang, running, precomputed, hour, setHour, playing, 
             <button className={view === "3d" ? "on" : ""} onClick={() => webgl && setView("3d")} disabled={!webgl}>3D</button>
           </div>
         </div>
-        {view === "3d" && webgl ? <Scene3D patch={patch} result={r} hour={hour} lang={lang} simple /> : (
-          <div className="view2d">
-            <div><PanoramaSvg result={r} hour={hour} lang={lang} simple />
-              <p className="legend-line"><i className="sw sun" />{es ? "Sol" : "Sun"} <i className="sw earth" />{es ? "Tierra" : "Earth"} <i className="sw terrain" />{es ? "lomas (relieve real)" : "ridges (real terrain)"} · {es ? "horizontal: dirección; vertical: altura sobre el horizonte" : "horizontal: direction; vertical: height above the horizon"}</p></div>
-            <div><ZenithMap patch={patch} result={r} hour={hour} lang={lang} /></div>
-          </div>
-        )}
-        <div data-tour="timeline"><Timeline result={r} hour={hour} setHour={setHour} playing={playing} setPlaying={setPlaying} lang={lang} /></div>
+        {renderViewer ? renderViewer() : null}
       </section>
 
       <MarginActions r={r} lang={lang} go={go} spec={spec} />

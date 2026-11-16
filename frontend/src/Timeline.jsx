@@ -12,7 +12,7 @@ export default function Timeline({ result, hour, setHour, playing, setPlaying, l
   const ev = result.events || [];
   const t = s.time[i].replace("T", " ").slice(0, 16);
   return (
-    <div className="timeline">
+    <div className="timeline" data-tour="timeline">
       <button className="btn icon" onClick={() => setPlaying(!playing)} aria-label={playing ? (es ? "Pausar" : "Pause") : (es ? "Reproducir la misión" : "Play the mission")}>
         {playing ? <Ic.pause /> : <Ic.play />}
       </button>

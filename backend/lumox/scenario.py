@@ -12,6 +12,7 @@ from . import margins as _margins
 from .constants import R_EARTH, R_SUN, TIME_STEP_HOURS
 from .energy import Panel, Power, energy_balance, irradiance, panel_power
 from .ephemeris import get_ephemeris
+from .features import name_horizon, offset_to_latlon
 from .horizon import terrain_horizon
 from .metrics import compute_metrics, verdict as _verdict
 from .sites import Site, get_site
@@ -39,8 +40,18 @@ class ScenarioSpec:
     margins: bool = True
     max_delay_days: int = 30
     label: str = ""
+    # desplazamiento (m, plano local equidistante) desde el sitio elegido: "analizar este punto"
+    offset_north_m: float = 0.0
+    offset_east_m: float = 0.0
 
     def site(self) -> Site:
+        if self.offset_north_m or self.offset_east_m:
+            base = get_site(self.site_id or "shackleton") if self.lat is None else None
+            la0, lo0 = (base.lat, base.lon) if base else (float(self.lat), float(self.lon))
+            la, lo = offset_to_latlon(la0, lo0, self.offset_north_m, self.offset_east_m)
+            nm = f"{(base.name if base else self.name or 'Punto')} · N {self.offset_north_m / 1000:+.2f} km, E {self.offset_east_m / 1000:+.2f} km"
+            return Site("point", nm, la, lo, "custom", f"desplazamiento desde {base.id if base else 'punto propio'}", None, False,
+                        "Punto elegido dentro del relieve del sitio")
         if self.lat is not None and self.lon is not None:
             return Site("custom", self.name or f"Custom {self.lat:.3f}, {self.lon:.3f}", float(self.lat),
                         float(self.lon), "custom", "user input", None, False)
@@ -125,6 +136,8 @@ def run_scenario(spec: ScenarioSpec, trace: Trace | None = None, store: bool = T
         },
         "events": _events(times_ext[sl], f_sun > 0, e_vis),
         "horizon": {"azimuth": horizon.azimuth.tolist(), "elevation": horizon.elevation.tolist(),
+                    # rasgo nombrado al que pertenece el punto que define el horizonte en cada azimut (o None)
+                    "feature": name_horizon(site.lat, site.lon, horizon.azimuth, horizon.distance, horizon.resolution_m),
                     "distance_m": np.nan_to_num(horizon.distance, nan=-1).tolist()},
         "metrics": {k: v for k, v in metrics.items() if k != "step_ids"},
         "energy": {k: v for k, v in bal.items() if k not in ("soc_wh", "soc_frac", "step_id")},

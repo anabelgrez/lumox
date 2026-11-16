@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import { Ic } from "./icons.jsx";
+import { verdictText } from "./SimpleView.jsx";
 
 // Panel derecho: veredicto, métricas, balance energético y cuenta regresiva.
 // Todo viene del resultado del motor; la cuenta regresiva busca el próximo
@@ -36,7 +37,8 @@ function EnergyChart({ r, hour, lang }) {
   );
 }
 
-export default function StatusPanel({ r, hour, lang, open, running }) {
+export default function StatusPanel({ r, hour, lang, open, running , compact = false, defaultOpen = false, children }) {
+  const [more, setMore] = useState(defaultOpen);
   const es = lang === "es";
   if (!r) return (
     <aside className="stack">
@@ -68,6 +70,53 @@ export default function StatusPanel({ r, hour, lang, open, running }) {
     [Ic.hourglass, es ? "Margen de retraso" : "Delay margin", r.margins?.days ? `${r.margins.days.viable_now ? r.margins.days.margin_days : 0} ${es ? "días" : "days"}` : "—", r.margins?.days?.step_id, ""],
     [Ic.sun, es ? "Elevación solar ahora" : "Solar elevation now", `${fmt(s.sun_el[i], 2, lang)}°`, st.ephemeris, "sun"],
   ];
+  const details = (<>
+    <div className="mlist" style={{ marginTop: 10 }}>
+      {rows.map(([Icon, lab, val, sid, cls], k) => (
+        <button key={k} className="mrow" onClick={() => open(sid)} title={es ? "Ver cómo se calculó" : "See how it was computed"}>
+          <Icon className={cls === "sun" ? "sun" : cls === "earth" ? "earth" : ""} /><span>{lab}</span><span className={"v " + (cls === "bad" ? "bad" : "")}>{val}</span>
+        </button>
+      ))}
+    </div>
+  </>);
+  const energyAndCountdown = (<>
+    <div className="panel"><EnergyChart r={r} hour={hour} lang={lang} /></div>
+    <div className="panel">
+      <button className="countdown" style={{ background: "none", border: 0, padding: 0, width: "100%", textAlign: "left", color: "inherit", cursor: "pointer" }} onClick={() => open(st.countdown)}>
+        <Ic.sun />
+        <div>
+          <div className="small soft">{sunUp ? (es ? "Próxima puesta de Sol" : "Next sunset") : (es ? "Próxima salida del Sol" : "Next sunrise")}</div>
+          <div className={"big" + (hhmm ? "" : " text")}>{hhmm ?? (es ? "No ocurre en esta misión" : "Not within this mission")}</div>
+          {nextSun && <div className="xs mute num">{nextSun.t.replace("T", " ").slice(0, 16)} UTC · ±30 min</div>}
+        </div>
+      </button>
+    </div>
+  </>);
+  if (compact) {
+    // Panel compacto: el veredicto en una frase y tres tarjetas; el resto se abre a pedido.
+    const vt = verdictText(r, lang), mt = r.metrics, d = md;
+    const N = (x, k = 0) => fmt(x, k, lang);
+    return (
+      <aside className="stack" aria-label={es ? "Estado de la misión" : "Mission status"}>
+        <div className="panel status-panel">
+          <div className="status-head"><Ic.target /><h2>{es ? "Estado de la misión" : "Mission status"}</h2><span className="live"><span className={"dot " + (running ? "warn" : "ok")} />{running ? (es ? "En análisis" : "Analysing") : (es ? "En vivo" : "Live")}</span></div>
+          <button className={"verdict " + v.state} style={{ width: "100%", textAlign: "left", cursor: "pointer" }} onClick={() => open(st.verdict)} aria-label={`${vt.title}. ${vt.why}`}>
+            <VIcon />
+            <div><div className="state phrase">{vt.title}</div><div className="why">{vt.why}</div></div>
+          </button>
+          <div className="mini3">
+            <button className="mini" onClick={() => open(st.sun_time)}><Ic.sun className="sun" /><span className="num">{N(mt.sun_time_pct)}%</span><small>{es ? "Energía" : "Energy"}</small></button>
+            <button className="mini" onClick={() => open(st.earth_time)}><Ic.earth className="earth" /><span className="num">{N(mt.earth_visible_pct)}%</span><small>{es ? "Comunicación" : "Comms"}</small></button>
+            <button className="mini" onClick={() => open(d?.step_id)}><Ic.hourglass /><span className="num">{d?.viable_now ? d.margin_days : 0} {es ? "d" : "d"}</span><small>{es ? "Margen" : "Margin"}</small></button>
+          </div>
+          <button className="btn ghost more" onClick={() => setMore(!more)} aria-expanded={more}>{more ? "▾" : "▸"} {es ? "Ver detalle" : "See detail"}</button>
+          {more && details}
+        </div>
+        {children}
+        {more && energyAndCountdown}
+      </aside>
+    );
+  }
   return (
     <aside className="stack" aria-label={es ? "Estado de la misión" : "Mission status"}>
       <div className="panel status-panel">
@@ -76,25 +125,10 @@ export default function StatusPanel({ r, hour, lang, open, running }) {
           <VIcon />
           <div><div className="state">{label}</div><div className="why">{why}</div></div>
         </button>
-        <div className="mlist" style={{ marginTop: 10 }}>
-          {rows.map(([Icon, lab, val, sid, cls], k) => (
-            <button key={k} className="mrow" onClick={() => open(sid)} title={es ? "Ver cómo se calculó" : "See how it was computed"}>
-              <Icon className={cls === "sun" ? "sun" : cls === "earth" ? "earth" : ""} /><span>{lab}</span><span className={"v " + (cls === "bad" ? "bad" : "")}>{val}</span>
-            </button>
-          ))}
-        </div>
+        {details}
       </div>
-      <div className="panel"><EnergyChart r={r} hour={hour} lang={lang} /></div>
-      <div className="panel">
-        <button className="countdown" style={{ background: "none", border: 0, padding: 0, width: "100%", textAlign: "left", color: "inherit", cursor: "pointer" }} onClick={() => open(st.countdown)}>
-          <Ic.sun />
-          <div>
-            <div className="small soft">{sunUp ? (es ? "Próxima puesta de Sol" : "Next sunset") : (es ? "Próxima salida del Sol" : "Next sunrise")}</div>
-            <div className={"big" + (hhmm ? "" : " text")}>{hhmm ?? (es ? "No ocurre en esta misión" : "Not within this mission")}</div>
-            {nextSun && <div className="xs mute num">{nextSun.t.replace("T", " ").slice(0, 16)} UTC · ±30 min</div>}
-          </div>
-        </button>
-      </div>
+      {children}
+      {energyAndCountdown}
     </aside>
   );
 }

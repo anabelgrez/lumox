@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { nextStep, nowPhrase } from "./plain.js";
+import { nextStep, nowPhrase, sciPhrase } from "./plain.js";
 
 // Lumo: an original SVG mascot — a small lunar module with a solar panel and
 // an antenna. Three states tied to the verdict: happy (survives), worried
@@ -51,9 +51,41 @@ export function LumoSvg({ state = "happy", size = 92 }) {
   );
 }
 
+
+// Lumo científico: el mismo módulo (cuerpo, patas, mástil con panel y antena) en línea fina, con un solo color de
+// acento y un instrumento de medición (un goniómetro con aguja). Los tres estados se leen en la geometría:
+//   viable: panel extendido, aguja alta, indicador lleno · al límite: panel inclinado, aguja media, indicador a medias ·
+//   no viable: panel plegado, aguja baja, indicador vacío. Sin caras ni gestos.
+export function LumoSciSvg({ state = "happy", size = 110 }) {
+  const ink = "var(--acc)", dim = "var(--mute)";
+  const needle = state === "happy" ? -62 : state === "worried" ? -90 : -118;          // grados de la aguja sobre el arco
+  const panelRot = state === "happy" ? -14 : state === "worried" ? -34 : -78;
+  const led = state === "happy" ? <circle cx="64" cy="62" r="3.4" fill={ink} /> : state === "worried" ? <><circle cx="64" cy="62" r="3.4" fill="none" stroke={ink} strokeWidth="1.4" /><path d="M64 58.6 A3.4 3.4 0 0 1 64 65.4 Z" fill={ink} /></> : <circle cx="64" cy="62" r="3.4" fill="none" stroke={dim} strokeWidth="1.4" />;
+  const rad = (d) => (d * Math.PI) / 180, cx = 42, cy = 62, r = 15;
+  const nx = cx + Math.cos(rad(needle)) * (r - 2), ny = cy + Math.sin(rad(needle)) * (r - 2);
+  return (
+    <svg className="mascot" viewBox="0 0 100 100" width={size} height={size} aria-label={`Lumo (${state})`} fill="none" stroke={ink} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      {/* antena */}
+      <path d="M70 38 L80 20" /><circle cx="81" cy="18.5" r="2.6" stroke={state === "fails" ? dim : ink} />
+      {state !== "fails" && <path d="M85 14 q5 4 0 9" opacity=".55" />}
+      {/* mástil y panel */}
+      <path d="M24 40 L24 56" /><g transform={`rotate(${panelRot} 24 40)`}><rect x="6" y="33" width="36" height="9" rx="1.5" />{[15, 24, 33].map((x) => <path key={x} d={`M${x} 33 V42`} opacity=".5" />)}</g>
+      {/* cuerpo */}
+      <rect x="26" y="42" width="48" height="34" rx="7" /><rect x="30" y="46" width="40" height="26" rx="4" opacity=".45" />
+      {/* instrumento: goniómetro con aguja */}
+      <path d={`M${cx - r} ${cy} A${r} ${r} 0 0 1 ${cx + r} ${cy}`} stroke={dim} />
+      {[-150, -120, -90, -60, -30].map((a) => <path key={a} d={`M${cx + Math.cos(rad(a)) * (r - 3)} ${cy + Math.sin(rad(a)) * (r - 3)} L${cx + Math.cos(rad(a)) * r} ${cy + Math.sin(rad(a)) * r}`} stroke={dim} strokeWidth="1" />)}
+      <path d={`M${cx} ${cy} L${nx} ${ny}`} strokeWidth="1.8" /><circle cx={cx} cy={cy} r="1.8" fill={ink} />
+      {led}
+      {/* patas */}
+      <path d="M32 76 L24 90 M68 76 L76 90 M44 76 V90 M56 76 V90" /><path d="M19 91 h10 M71 91 h10 M40 91 h8 M52 91 h8" />
+    </svg>
+  );
+}
+
 const TOUR_KEY = "lumox.tour.v1";
 
-export default function Lumo({ result, t, lang, hour = 0, guide, setGuide, visible, setVisible, loadExample, running, onAction, tourReady, compact = false }) {
+export default function Lumo({ result, t, lang, hour = 0, guide, setGuide, visible, setVisible, loadExample, running, onAction, tourReady, compact = false, scientific = false, stepNo }) {
   const [step, setStep] = useState(0);
   const [open, setOpen] = useState(!compact);
   useEffect(() => setOpen(!compact), [compact]);
@@ -83,6 +115,17 @@ export default function Lumo({ result, t, lang, hour = 0, guide, setGuide, visib
   };
 
   if (!visible) return <button className="btn lumo-toggle" onClick={() => setVisible(true)}>{t.lumoShow}</button>;
+  if (scientific) {
+    const st = running ? "worried" : !result ? "happy" : result.verdict.state === "survives" ? "happy" : result.verdict.state === "marginal" ? "worried" : "asleep";
+    const lines = running ? [es ? "Calculando. Los pasos se listan en la traza." : "Computing. Steps are listed in the trace."] : result ? sciPhrase(result, hour, lang, stepNo) : [es ? "Sin escenario cargado." : "No scenario loaded."];
+    return (
+      <div className={"lumo sci" + (open ? "" : " compact")} role="complementary" aria-label="Lumo">
+        {open && <div className="bubble" aria-live="polite">{lines.map((l, k) => <p key={k} className={k ? "sci-l" : ""}>{l}</p>)}
+          <div className="acts"><button className="btn ghost" onClick={() => setVisible(false)}>{t.lumoHide}</button></div></div>}
+        <button style={{ background: "none", border: 0, padding: 0 }} onClick={() => setOpen(!open)} aria-label={es ? "Mostrar u ocultar la lectura de Lumo" : "Show or hide Lumo's reading"} aria-expanded={open}><LumoSciSvg state={st} size={96} /></button>
+      </div>
+    );
+  }
   const state = running ? "worried" : !result ? "happy" : result.verdict.state === "survives" ? "happy" : result.verdict.state === "marginal" ? "worried" : "asleep";
   // Lumo usa las mismas frases que la traza: primero qué pasa ahora, después qué hacer
   const next = nextStep(running ? null : result, lang);

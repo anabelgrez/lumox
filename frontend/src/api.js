@@ -30,27 +30,39 @@ export const api = {
     getJSON("/api/scenario", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(spec) }),
 };
 
-// Run a scenario with live step streaming. onStep(step) is called per step.
-// Resolves with { result, precomputed:false } or falls back to static JSON.
+// Corre un escenario con los pasos en vivo (WebSocket). Si el WebSocket se corta antes de terminar
+// (cálculos largos, proxy, red), se reintenta por REST con el mismo pedido; y solo si el motor no
+// responde para nada, se usa el JSON precalculado, rotulado como tal.
 export function runScenario(spec, { onStep, onStart, signal } = {}) {
   return new Promise((resolve, reject) => {
-    let settled = false;
+    let settled = false, ws = null, wsDone = false;
     const done = (v) => { if (!settled) { settled = true; resolve(v); } };
     const fail = (e) => { if (!settled) { settled = true; reject(e); } };
-    let ws;
-    try { ws = new WebSocket(WS_URL()); } catch (e) { return fallback(spec).then(done, fail); }
-    const timer = setTimeout(() => { try { ws.close(); } catch {} fallback(spec).then(done, fail); }, 8000);
+    const viaRest = async () => {
+      if (wsDone) return; wsDone = true;
+      try {
+        const result = await api.scenarioRest(spec);
+        const trace = await api.trace(result.trace_id).catch(() => null);
+        done({ result, trace, precomputed: false, viaRest: true });
+      } catch (e) {
+        if (String(e.message || e).startsWith("422") || String(e.message || e).startsWith("404")) return fail(e);   // error del pedido: no se tapa con un precalculado
+        fallback(spec).then(done, () => fail(e));
+      }
+    };
+    try { ws = new WebSocket(WS_URL()); } catch { viaRest(); return; }
+    const timer = setTimeout(() => { try { ws.close(); } catch { /* nada */ } viaRest(); }, 8000);
     ws.onopen = () => { clearTimeout(timer); ws.send(JSON.stringify(spec)); };
     ws.onmessage = (ev) => {
       const m = JSON.parse(ev.data);
       if (m.type === "start") onStart?.(m.trace_id);
       else if (m.type === "step") onStep?.(m.step, m.trace_id);
-      else if (m.type === "result") done({ result: m.result, precomputed: false });
-      else if (m.type === "error") fail(new Error(m.message));
+      else if (m.type === "result") { wsDone = true; done({ result: m.result, precomputed: false }); }
+      else if (m.type === "error") { wsDone = true; fail(new Error(m.message)); }
+      // m.type === "hb": latido del servidor, solo mantiene viva la conexión
     };
-    ws.onerror = () => { clearTimeout(timer); fallback(spec).then(done, fail); };
-    ws.onclose = () => { if (!settled) fallback(spec).then(done, fail); };
-    signal?.addEventListener("abort", () => { try { ws.close(); } catch {} fail(new DOMException("aborted", "AbortError")); });
+    ws.onerror = () => { clearTimeout(timer); viaRest(); };
+    ws.onclose = () => { if (!settled) viaRest(); };
+    signal?.addEventListener("abort", () => { wsDone = true; try { ws.close(); } catch { /* nada */ } fail(new DOMException("aborted", "AbortError")); });
   });
 }
 
@@ -63,6 +75,21 @@ async function fallback(spec) {
   const data = await getJSON(`/scenarios/${match.id}.json`);
   return { result: data.result, trace: data.trace, precomputed: true, exported: data.exported };
 }
+
+// Rasgos nombrados (IAU/USGS) y sombras permanentes (LOLA) alrededor del sitio; el relieve no cambia con la fecha.
+const featCache = new Map();
+export function getFeatures(lat, lon, radius_km = 150) {
+  const k = `${lat},${lon},${radius_km}`;
+  if (!featCache.has(k)) {
+    const p = getJSON(`/api/features?lat=${lat}&lon=${lon}&radius_km=${radius_km}&limit=80&psr_radius_m=13000`).catch((e) => { featCache.delete(k); return { features: [], psr: [], available: {}, error: String(e.message || e) }; });
+    featCache.set(k, p);
+  }
+  return featCache.get(k);
+}
+// Horizonte para otra altura de mástil / otro punto, sin recalcular el escenario.
+export const getHorizon = (lat, lon, mast_m, north_m = 0, east_m = 0) =>
+  getJSON(`/api/horizon?lat=${lat}&lon=${lon}&mast_m=${mast_m}&north_m=${north_m}&east_m=${east_m}`);
+export const locate = (lat0, lon0, lat, lon) => getJSON(`/api/locate?lat0=${lat0}&lon0=${lon0}&lat=${lat}&lon=${lon}`);
 
 // Parche de terreno para 2D/3D, con caché por sitio (no cambia con la fecha).
 const terrainCache = new Map();

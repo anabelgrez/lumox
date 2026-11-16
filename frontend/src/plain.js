@@ -104,3 +104,28 @@ export function plain(step, lang = "es") {
       return step.description || "";
   }
 }
+
+// ---------------------------------------------------------------- Lumo científico
+// Texto preciso: valor, unidad, incertidumbre y el paso de la traza que lo respalda. Sin exclamaciones ni chistes.
+// Incertidumbre de las efemérides: la medida en tests/test_validation_horizons.py (SPICE contra Horizons, 10 épocas,
+// máx. |ΔEl| = 4,4e-8°; se redondea a 5e-7° por prudencia). Para lo demás, el motor no produce una incertidumbre
+// numérica y se dice así.
+export const EPH_UNC_DEG = "5e-7";
+export function sciPhrase(r, hour, lang, stepNo) {
+  if (!r) return [];
+  const es = lang === "es", s = r.series, i = Math.min(hour, s.time.length - 1), m = r.metrics, v = r.verdict;
+  const F = (x, d = 2) => n(x, d, lang), st = (id) => (stepNo?.(id) != null ? ` (${es ? "paso" : "step"} ${stepNo(id)})` : "");
+  const el = s.sun_el[i], hz = s.sun_horizon_deg?.[i], f = s.sun_fraction[i], res = r.data.horizon_source;
+  const l1 = es
+    ? `Elevación solar ${F(el)}° ± ${EPH_UNC_DEG}°${st(r.steps.ephemeris)}; horizonte local ${F(hz)}°${st(r.steps.horizon)}; fracción de disco ${F(f, 3)}${st(r.steps.disc_sun)}. ${f <= 0 ? "Sol no visible." : f < 0.999 ? "Sol parcialmente visible." : "Sol visible."}`
+    : `Solar elevation ${F(el)}° ± ${EPH_UNC_DEG}°${st(r.steps.ephemeris)}; local horizon ${F(hz)}°${st(r.steps.horizon)}; disc fraction ${F(f, 3)}${st(r.steps.disc_sun)}. ${f <= 0 ? "Sun not visible." : f < 0.999 ? "Sun partly visible." : "Sun visible."}`;
+  const ee = s.earth_el[i], eh = s.earth_horizon_deg?.[i], fe = s.earth_fraction[i];
+  const l2 = es
+    ? `Elevación de la Tierra ${F(ee)}°; horizonte ${F(eh)}°; fracción ${F(fe, 3)}${st(r.steps.disc_earth)}. ${fe > 0 ? "Tierra visible." : "Tierra no visible."}`
+    : `Earth elevation ${F(ee)}°; horizon ${F(eh)}°; fraction ${F(fe, 3)}${st(r.steps.disc_earth)}. ${fe > 0 ? "Earth visible." : "Earth not visible."}`;
+  const l3 = es
+    ? `Noche más larga ${F(m.longest_night_h, 0)} h${st(r.steps.longest_night)} frente a ${F(r.autonomy_h, 0)} h de autonomía; silencio más largo ${F(m.longest_comm_gap_h, 0)} h${st(r.steps.longest_gap)} frente a ${F(r.spec.max_comm_gap_h, 0)} h. Veredicto: ${{ survives: "cumple", marginal: "al límite", fails: "no cumple" }[v.state]}${st(r.steps.verdict)}.`
+    : `Longest night ${F(m.longest_night_h, 0)} h${st(r.steps.longest_night)} against ${F(r.autonomy_h, 0)} h autonomy; longest silence ${F(m.longest_comm_gap_h, 0)} h${st(r.steps.longest_gap)} against ${F(r.spec.max_comm_gap_h, 0)} h. Verdict: ${{ survives: "met", marginal: "marginal", fails: "not met" }[v.state]}${st(r.steps.verdict)}.`;
+  const l4 = res === "flat" ? (es ? "Horizonte plano: no hay relieve cargado para este sitio; los valores son optimistas." : "Flat horizon: no terrain loaded for this site; values are optimistic.") : null;
+  return [l1, l2, l3, l4].filter(Boolean);
+}

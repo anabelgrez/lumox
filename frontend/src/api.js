@@ -7,7 +7,18 @@ const WS_URL = () => {
   return `${proto}://${location.host}/ws/scenario`;
 };
 
+// Build estático (GitHub Pages): sin backend. Los GET se leen de instantáneas en public/static-api
+// y los escenarios de public/scenarios; todo es precalculado y la interfaz lo avisa.
+export const STATIC = import.meta.env.VITE_STATIC === "1";
+const BASE = import.meta.env.BASE_URL;
+export const assetUrl = (p) => BASE + p.replace(/^\//, "");
+const staticKey = (url) => url.replace(/^\//, "").replace(/[^a-zA-Z0-9._-]/g, "_") + ".json";
+
 export async function getJSON(url, opts) {
+  if (STATIC) {
+    if (opts?.method && opts.method !== "GET") throw new Error("503: demo estática, sin motor de cálculo (ejecútalo en local)");
+    url = url.startsWith("/scenarios/") ? assetUrl(url) : assetUrl("static-api/" + staticKey(url));
+  }
   const r = await fetch(url, opts);
   if (!r.ok) {
     let detail = r.statusText;
@@ -34,6 +45,7 @@ export const api = {
 // (cálculos largos, proxy, red), se reintenta por REST con el mismo pedido; y solo si el motor no
 // responde para nada, se usa el JSON precalculado, rotulado como tal.
 export function runScenario(spec, { onStep, onStart, signal } = {}) {
+  if (STATIC) return fallback(spec);
   return new Promise((resolve, reject) => {
     let settled = false, ws = null, wsDone = false;
     const done = (v) => { if (!settled) { settled = true; resolve(v); } };
@@ -70,7 +82,8 @@ export function runScenario(spec, { onStep, onStart, signal } = {}) {
 async function fallback(spec) {
   const idx = await getJSON("/scenarios/index.json").catch(() => null);
   if (!idx) throw new Error("backend offline and no precomputed scenarios found (run: python -m lumox.export)");
-  const match = idx.scenarios.find((s) => s.site_id === spec.site_id && s.start === spec.start);
+  const match = idx.scenarios.find((s) => s.site_id === spec.site_id && s.start === spec.start)
+    || (STATIC ? idx.scenarios.find((s) => s.id === `site-${spec.site_id}`) : null);
   if (!match) throw new Error("backend offline; this scenario is not among the precomputed ones");
   const data = await getJSON(`/scenarios/${match.id}.json`);
   return { result: data.result, trace: data.trace, precomputed: true, exported: data.exported };

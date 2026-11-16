@@ -23,8 +23,6 @@ data/cache/
 *.img
 *.lbl
 
-# Exported scenarios are generated; keep the folder, not the files
-frontend/public/scenarios/*.json
 
 # Editors / OS
 .vscode/

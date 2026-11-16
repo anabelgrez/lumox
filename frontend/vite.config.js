@@ -16,6 +16,8 @@ const quiet = (proxy) => {
 
 export default defineConfig({
   plugins: [react()],
+  // GitHub Pages sirve bajo /<repo>/; el workflow define VITE_BASE (en local queda "/")
+  base: process.env.VITE_BASE || "/",
   server: {
     port: 5173,
     proxy: {

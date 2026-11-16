@@ -1,5 +1,7 @@
-## Live demo · Demo en vivo
 
+<img width="2560" height="1280" alt="image" src="https://github.com/user-attachments/assets/d95abab3-5a3f-4975-9c70-93af48261f9c" />
+
+## Live demo · Demo en vivo
 **https://anabelgrez.github.io/lumox/**
 
 > ⚠️ **EN:** This GitHub Pages demo is **static** and runs on **simulated, precomputed data**.

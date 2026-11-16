@@ -226,7 +226,8 @@ export default function Scene3D({ patch, result, hour, lang }) {
     window.__lumox3d = { get fps() { return R.current.fpsVal; } };   // para medir en las pruebas
     loop();
     setLoadMs(Math.round(performance.now() - t0));
-    const ro = new ResizeObserver(() => { renderer.setSize(el.clientWidth, el.clientHeight); camera.aspect = el.clientWidth / el.clientHeight; camera.updateProjectionMatrix(); }); ro.observe(el);
+    // al cambiar el tamaño el lienzo se borra: hay que marcarlo para volver a dibujar
+    const ro = new ResizeObserver(() => { renderer.setSize(el.clientWidth, el.clientHeight); camera.aspect = el.clientWidth / Math.max(el.clientHeight, 1); camera.updateProjectionMatrix(); if (R.current) R.current.dirty = true; }); ro.observe(el);
     return () => { cancelAnimationFrame(raf); ro.disconnect(); controls.dispose(); renderer.dispose(); renderer.domElement.remove(); R.current = {}; };
   }, [patch, result?.trace_id, result?.site?.lat]); // eslint-disable-line
 

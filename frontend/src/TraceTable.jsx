@@ -3,6 +3,7 @@ import { api } from "./api.js";
 import { plain } from "./plain.js";
 import { animFor } from "./Animations.jsx";
 import { Ic } from "./icons.jsx";
+import { pretty } from "./latex.js";
 
 // Tabla "Cálculos en vivo". Las filas aparecen a medida que el motor emite cada
 // paso. En modo Simple se ve la frase en criollo; en Técnico, fórmula, entradas,
@@ -61,9 +62,9 @@ export default function TraceTable({ steps, order, traceId, lang, mode, onAnim, 
           <table className="ttable">
             <thead><tr>
               <th>#</th><th>{es ? "Cálculo" : "Step"}</th>
-              {tech ? <><th>{es ? "Fórmula" : "Formula"}</th><th>{es ? "Fuente" : "Source"}</th></> : <th>{es ? "En criollo" : "In plain words"}</th>}
+              {tech ? <><th>{es ? "Fórmula" : "Formula"}</th><th>{es ? "Entradas" : "Inputs"}</th></> : <th>{es ? "En criollo" : "In plain words"}</th>}
               <th>{es ? "Resultado" : "Result"}</th>
-              {tech && <><th>{es ? "Incertidumbre" : "Uncertainty"}</th><th>{es ? "Depende de" : "Depends on"}</th></>}
+              {tech && <><th>{es ? "Incertidumbre" : "Uncertainty"}</th><th>{es ? "Fuente" : "Source"}</th></>}
               <th><span className="sr-only">{es ? "Abrir" : "Open"}</span></th>
             </tr></thead>
             <tbody>
@@ -77,10 +78,11 @@ export default function TraceTable({ steps, order, traceId, lang, mode, onAnim, 
                       onClick={() => toggle(s.id)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(s.id); } }}>
                       <td className="num mute">{s.index + 1}</td>
                       <td className="name">{s.name}</td>
-                      {tech ? <><td className="f" title={s.formula}>{s.formula || "—"}</td><td><span className={"tag " + cls}>{tag}</span></td></>
+                      {tech ? <><td className="f" title={s.formula}>{s.formula ? pretty(s.formula) : "—"}</td>
+                        <td className="inp" title={s.inputs.map((i) => `${i.name} = ${show(i.value)} ${i.unit}`).join("\n")}>{s.inputs.slice(0, 2).map((i) => `${i.name} = ${show(i.value)}${i.unit ? " " + i.unit : ""}`).join(", ") || "—"}</td></>
                         : <td className="soft plaincol">{plain(s, lang)}</td>}
                       <td className="res" title={show(s.result?.value)}>{show(s.result?.value)} <span className="mute">{s.result?.unit}</span></td>
-                      {tech && <><td className="xs soft" style={{ maxWidth: 220 }}>{s.uncertainty || "—"}</td><td className="num xs">{s.depends_on?.join(", ") || "—"}</td></>}
+                      {tech && <><td className="xs soft" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={s.uncertainty || ""}>{s.uncertainty || "—"}</td><td><span className={"tag " + cls}>{tag}</span></td></>}
                       <td style={{ width: 28 }}><Ic.chev width="16" height="16" style={{ transform: isOpen ? "rotate(180deg)" : "none" }} /></td>
                     </tr>
                     {isOpen && (

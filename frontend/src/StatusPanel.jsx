@@ -21,14 +21,14 @@ function EnergyChart({ r, hour, lang }) {
     <div className="chart">
       <div className="panel-h" style={{ marginBottom: 4 }}>
         <h2 style={{ fontSize: 13 }}>{es ? "Balance energético" : "Energy balance"}</h2>
-        <span className="right xs"><span className="sun">● {es ? "Generada" : "Generated"}</span> <span className="earth">● {es ? "Consumida" : "Load"}</span> <span className="ok">● {es ? "Batería" : "Battery"}</span></span>
+        <span className="right xs"><span className="lg"><i style={{ background: "var(--ch-gen)" }} />{es ? "Generada" : "Generated"}</span><span className="lg"><i style={{ background: "var(--ch-load)" }} />{es ? "Consumida" : "Load"}</span><span className="lg"><i style={{ background: "var(--ch-soc)" }} />{es ? "Batería" : "Battery"}</span></span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={es ? "Potencia generada, consumo y carga de batería" : "Generated power, load and battery charge"}>
         {[0, 0.5, 1].map((f) => <g key={f}><line x1={L} x2={W - 6} y1={Y(maxP * f)} y2={Y(maxP * f)} stroke="var(--line)" />
           <text x={L - 4} y={Y(maxP * f) + 3} textAnchor="end" fontSize="9" fill="var(--mute)" fontFamily="var(--mono)">{(maxP * f / 1000).toFixed(1)}kW</text></g>)}
-        <path d={soc} fill="none" stroke="var(--ok)" strokeWidth="1" strokeOpacity="0.6" strokeDasharray="3 2" />
-        <line x1={L} x2={W - 6} y1={Y(load)} y2={Y(load)} stroke="var(--earth)" strokeWidth="1.6" />
-        <path d={path} fill="none" stroke="var(--sun)" strokeWidth="1.8" />
+        <path d={soc} fill="none" stroke="var(--ch-soc)" strokeWidth="1.5" strokeDasharray="4 3" />
+        <line x1={L} x2={W - 6} y1={Y(load)} y2={Y(load)} stroke="var(--ch-load)" strokeWidth="1.5" />
+        <path d={path} fill="none" stroke="var(--ch-gen)" strokeWidth="2" strokeLinejoin="round" />
         <line x1={X(Math.min(hour, n - 1))} x2={X(Math.min(hour, n - 1))} y1="4" y2={H - B} stroke="var(--soft)" strokeDasharray="2 2" />
         {[0, 0.5, 1].map((f) => <text key={f} x={X(f * (n - 1))} y={H - 4} fontSize="9" fill="var(--mute)" textAnchor="middle" fontFamily="var(--mono)">{Math.round(f * days)}d</text>)}
       </svg>
@@ -46,10 +46,14 @@ export default function StatusPanel({ r, hour, lang, open, running }) {
   );
   const m = r.metrics, v = r.verdict, st = r.steps, s = r.series;
   const i = Math.min(hour, s.time.length - 1);
-  const label = { survives: es ? "Sobrevive" : "Survives", marginal: es ? "Al límite" : "Marginal", fails: es ? "No sobrevive" : "Does not survive" }[v.state];
-  const why = { survives: es ? "Noche y silencio dentro de los límites" : "Night and silence within limits",
-    marginal: es ? "A menos del 10 % de un límite" : "Within 10% of a limit",
-    fails: es ? "Se pasa de al menos un límite" : "At least one limit exceeded" }[v.state];
+  const label = { survives: es ? "Viable" : "Viable", marginal: es ? "Al límite" : "Marginal", fails: es ? "No viable" : "Not viable" }[v.state];
+  // debajo del veredicto, el dato que lo decide (como en la referencia: "Margen de retraso: N días")
+  const md = r.margins?.days;
+  const why = v.state !== "fails"
+    ? (md ? (es ? `Margen de retraso: ${md.margin_days} ${md.margin_days === 1 ? "día" : "días"}` : `Delay margin: ${md.margin_days} day${md.margin_days === 1 ? "" : "s"}`) : (es ? "Dentro de los límites" : "Within limits"))
+    : m.longest_night_h > r.autonomy_h
+      ? (es ? `Noche más larga ${fmt(m.longest_night_h, 0, lang)} h · batería ${fmt(r.autonomy_h, 0, lang)} h` : `Longest night ${fmt(m.longest_night_h, 0, lang)} h · battery ${fmt(r.autonomy_h, 0, lang)} h`)
+      : (es ? `Sin contacto ${fmt(m.longest_comm_gap_h, 0, lang)} h · máximo ${fmt(r.spec.max_comm_gap_h, 0, lang)} h` : `No contact ${fmt(m.longest_comm_gap_h, 0, lang)} h · max ${fmt(r.spec.max_comm_gap_h, 0, lang)} h`);
   const VIcon = v.state === "survives" ? Ic.okc : v.state === "marginal" ? Ic.alert : Ic.xc;
   // próximo evento del Sol desde la hora elegida (la lista ya viene del backend)
   const nextSun = r.events?.find((e) => e.body === "sun" && e.idx > i);
@@ -66,8 +70,8 @@ export default function StatusPanel({ r, hour, lang, open, running }) {
   ];
   return (
     <aside className="stack" aria-label={es ? "Estado de la misión" : "Mission status"}>
-      <div className="panel">
-        <div className="panel-h"><Ic.atom /><h2>{es ? "Estado de misión" : "Mission status"}</h2><span className="right live"><span className={"dot " + (running ? "warn" : "ok")} />{running ? (es ? "Calculando" : "Computing") : (es ? "En vivo" : "Live")}</span></div>
+      <div className="panel status-panel">
+        <div className="status-head"><Ic.target /><h2>{es ? "Estado de la misión" : "Mission status"}</h2><span className="live"><span className={"dot " + (running ? "warn" : "ok")} />{running ? (es ? "En análisis" : "Analysing") : (es ? "En vivo" : "Live")}</span></div>
         <button className={"verdict " + v.state} style={{ width: "100%", textAlign: "left", cursor: "pointer" }} onClick={() => open(st.verdict)} aria-label={`${label}. ${why}`}>
           <VIcon />
           <div><div className="state">{label}</div><div className="why">{why}</div></div>
@@ -86,7 +90,7 @@ export default function StatusPanel({ r, hour, lang, open, running }) {
           <Ic.sun />
           <div>
             <div className="small soft">{sunUp ? (es ? "Próxima puesta de Sol" : "Next sunset") : (es ? "Próxima salida del Sol" : "Next sunrise")}</div>
-            <div className="big">{hhmm ?? (es ? "fuera de la ventana" : "beyond window")}</div>
+            <div className={"big" + (hhmm ? "" : " text")}>{hhmm ?? (es ? "No ocurre en esta misión" : "Not within this mission")}</div>
             {nextSun && <div className="xs mute num">{nextSun.t.replace("T", " ").slice(0, 16)} UTC · ±30 min</div>}
           </div>
         </button>

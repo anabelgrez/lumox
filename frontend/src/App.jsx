@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { api, decodeSpec, encodeSpec, getJSON, getTerrain, runScenario } from "./api.js";
 import { Answer, Home } from "./SimpleView.jsx";
 import Timeline from "./Timeline.jsx";
+import CalcCard from "./CalcCard.jsx";
 import { T } from "./i18n.js";
 import { Ic, Logo } from "./icons.jsx";
 import { PanoramaSvg } from "./Panorama.jsx";
@@ -43,7 +44,7 @@ const NAV = [
 export default function App() {
   const [lang, setLang] = useState(() => (navigator.language || "es").startsWith("es") ? "es" : "en");
   const t = T[lang], es = lang === "es";
-  const [mode, setMode] = useState("simple");              // simple | tech
+  const [mode, setMode] = useState("tech");                // tech = la vista de la referencia; simple = guiada
   // en Simple: primero la pregunta, después la respuesta
   const [screen, setScreen] = useState(() => (decodeSpec() ? "answer" : "home"));
   const [section, setSection] = useState("overview");
@@ -99,9 +100,14 @@ export default function App() {
   // "#ejemplo" abre directo el caso del atraso (sirve para la demo y para las capturas).
   useEffect(() => {
     if (location.hash === "#ejemplo") { loadExample(); return; }
-    if (screen === "answer") run(spec);
+    if (decodeSpec()) { run(spec); return; }
+    if (mode === "tech") loadPre("base", "site-shackleton");   // la misión base, precalculada
   }, []); // eslint-disable-line
-  useEffect(() => { if (mode === "tech" && !result && !running) run(spec); }, [mode]); // eslint-disable-line
+  const firstMode = useRef(true);
+  useEffect(() => {
+    if (firstMode.current) { firstMode.current = false; return; }
+    if (mode === "tech" && !result && !running) loadPre("base", "site-shackleton");
+  }, [mode]); // eslint-disable-line
 
   // el parche de terreno depende solo del sitio
   useEffect(() => {
@@ -121,14 +127,16 @@ export default function App() {
 
   const update = (patchSpec) => { const s = { ...spec, ...patchSpec }; setSpec(s); setAllResults({}); return s; };
   const go = (patchSpec) => run(update(patchSpec), { keep: true });
-  const loadPreset = (k) => { setPreset(k); const s = { ...PRESETS[k].spec, site_id: spec.site_id }; setSpec(s); run(s); };
+  const loadPreset = (k) => { setPreset(k); const s = { ...PRESETS[k].spec, site_id: spec.site_id }; setSpec(s); run(s, { keep: true }); };
   // El ejemplo abre al instante con el resultado precalculado (export.py) y
   // después se refresca con el motor en vivo, sin vaciar la pantalla.
-  const loadExample = async () => {
-    setSection("overview"); setPreset("delay9"); setScreen("answer");
-    const s = PRESETS.delay9.spec; setSpec(s); setAllResults({});
+  const loadExample = () => loadPre("delay9", "example-delay");
+  // Abre un escenario precalculado (export.py) al instante y lo refresca en vivo sin vaciar la pantalla.
+  const loadPre = async (key, file) => {
+    setSection("overview"); setPreset(key); setScreen("answer");
+    const s = PRESETS[key].spec; setSpec(s); setAllResults({});
     try {
-      const pre = await getJSON("/scenarios/example-delay.json");
+      const pre = await getJSON(`/scenarios/${file}.json`);
       setResult(pre.result); setPrecomputed(true); setHour(0);
       const st = {}; pre.trace.steps.forEach((x) => { st[x.id] = x; }); setSteps(st); setOrder(pre.trace.steps.map((x) => x.id)); setTraceId(null);
       run(s, { keep: true });
@@ -164,18 +172,27 @@ export default function App() {
   const curTime = result ? result.series.time[Math.min(hour, n - 1)] : spec.start;
   const startDate = spec.start.slice(0, 10), startTime = spec.start.slice(11, 16);
   const showViewer = section === "overview" || section === "explorer";
+  const [sceneKey, setSceneKey] = useState(0);            // remontar la escena = volver a la vista inicial
+  const viewerRef = useRef();
+  const fullscreen = () => { const el = viewerRef.current; if (!el) return; if (document.fullscreenElement) document.exitFullscreen(); else el.requestFullscreen?.(); };
 
   // ojo: es una función y no un componente, para que la escena 3D no se rearme en cada render
   const viewer = (big) => (
-    <section className="panel viewer" aria-label={es ? "Visor del sitio" : "Site viewer"}>
+    <section className="panel viewer" ref={viewerRef} aria-label={es ? "Visor del sitio" : "Site viewer"}>
       <div className="vtop seg" role="group" aria-label={es ? "Vista" : "View"}>
-        <button className={view === "2d" ? "on" : ""} onClick={() => setView("2d")}><Ic.square width="16" height="16" />2D</button>
-        <button className={view === "3d" ? "on" : ""} onClick={() => webgl && setView("3d")} disabled={!webgl} title={webgl ? "" : (es ? "Tu equipo no soporta WebGL" : "WebGL not available")}><Ic.cube width="16" height="16" />3D</button>
+        <button className={view === "2d" ? "on" : ""} onClick={() => setView("2d")}><Ic.globe width="18" height="18" />2D</button>
+        <button className={view === "3d" ? "on" : ""} onClick={() => webgl && setView("3d")} disabled={!webgl} title={webgl ? "" : (es ? "Tu equipo no soporta WebGL" : "WebGL not available")}><Ic.cube width="18" height="18" />3D</button>
       </div>
       {!result ? (
         running ? <div className="skeleton" style={{ height: 480 }} /> : <div className="empty" style={{ height: 300, display: "grid", placeItems: "center" }}>{error ? (es ? "No se pudo calcular el escenario." : "Could not compute the scenario.") : "—"}</div>
       ) : view === "3d" && webgl ? (
-        <Scene3D patch={patch} result={result} hour={hour} lang={lang} />
+        <>
+          <Scene3D key={sceneKey} patch={patch} result={result} hour={hour} lang={lang} />
+          <div className="v-tools" role="group" aria-label={es ? "Controles del visor" : "Viewer controls"}>
+            <button onClick={() => setSceneKey((k) => k + 1)} title={es ? "Volver a la vista inicial" : "Reset view"} aria-label={es ? "Volver a la vista inicial" : "Reset view"}><Ic.target /></button>
+            <button onClick={fullscreen} title={es ? "Pantalla completa" : "Full screen"} aria-label={es ? "Pantalla completa" : "Full screen"}><Ic.expand /></button>
+          </div>
+        </>
       ) : (
         <div className="view2d" style={big ? { gridTemplateColumns: "1fr" } : undefined}>
           <div>
@@ -201,7 +218,7 @@ export default function App() {
       {anim && <AnimModal kind={anim.kind} caption={anim.caption} lang={lang} onClose={() => setAnim(null)} />}
       <Lumo result={screen === "home" && mode === "simple" ? null : result} t={t} lang={lang} hour={hour} guide={guide} setGuide={setGuide}
         visible={lumoVisible} setVisible={setLumoVisible} loadExample={loadExample} running={running} onAction={onLumo}
-        tourReady={mode === "simple" && screen === "answer" && !!result} />
+        tourReady={mode === "simple" && screen === "answer" && !!result} compact={mode === "tech"} />
     </>
   );
   const modeSwitch = (
@@ -229,7 +246,7 @@ export default function App() {
               patch={patch} webgl={webgl} view={view} setView={setView} go={go} spec={spec} steps={steps} order={order} traceId={traceId}
               onAnim={(k, c) => setAnim({ kind: k, caption: c })} onNew={() => setScreen("home")} openStep={openStep} />}
       </main>
-      <footer className="simple-foot">{es ? "Datos: NASA/JPL Horizons, NAIF SPICE, LRO LOLA y LROC, NASA SVS. Lumox no es un producto oficial de NASA." : "Data: NASA/JPL Horizons, NAIF SPICE, LRO LOLA and LROC, NASA SVS. Lumox is not an official NASA product."} <a href="https://github.com/anabelgrez/lumox/blob/main/docs/FUENTES.md" target="_blank" rel="noreferrer">{es ? "Fuentes" : "Sources"}</a></footer>
+      <footer className="simple-foot">{es ? "Datos: NASA/JPL Horizons, NAIF SPICE, LRO LOLA y LROC, NASA SVS. Lumox no es un producto oficial de NASA." : "Data: NASA/JPL Horizons, NAIF SPICE, LRO LOLA and LROC, NASA SVS. Lumox is not an official NASA product."} <a href="https://github.com/anabelgrez/lumox/blob/v3-explorador/docs/FUENTES.md" target="_blank" rel="noreferrer">{es ? "Fuentes" : "Sources"}</a></footer>
       {modals}
     </div>
   );
@@ -240,52 +257,53 @@ export default function App() {
       <div className="brand"><Logo /><div><b>LUMOX</b><span>Lunar Mission Planner</span></div></div>
 
       <header className="topbar">
-        <div className="ctl"><div><label htmlFor="preset">{es ? "Escenario" : "Scenario"}</label>
+        <div className="ctl preset-ctl"><div><label htmlFor="preset">{es ? "Escenario" : "Scenario"}</label>
           <select id="preset" value={preset} onChange={(e) => loadPreset(e.target.value)}>{Object.entries(PRESETS).map(([k, p]) => <option key={k} value={k}>{p[lang]}</option>)}</select></div></div>
-        <div className="ctl"><Ic.pin /><div><label htmlFor="site">{es ? "Sitio" : "Site"}</label>
-          <select id="site" value={spec.site_id} onChange={(e) => go({ site_id: e.target.value })}>
+        <div className="ctl"><Ic.pin /><div><label htmlFor="site">{site ? `${Math.abs(site.lat).toFixed(2)}°${site.lat < 0 ? "S" : "N"}, ${Math.abs(site.lon).toFixed(2)}°${site.lon < 0 ? (es ? "O" : "W") : "E"}` : (es ? "Sitio" : "Site")}</label>
+          <select id="site" value={spec.site_id} onChange={(e) => go({ site_id: e.target.value })} aria-label={es ? "Sitio" : "Site"}>
             {sites.length === 0 && <option value={spec.site_id}>{spec.site_id}</option>}
-            {sites.map((s) => <option key={s.id} value={s.id}>{s.name} ({Math.abs(s.lat).toFixed(2)}°{s.lat < 0 ? "S" : "N"}, {Math.abs(s.lon).toFixed(2)}°{s.lon < 0 ? (es ? "O" : "W") : "E"})</option>)}
+            {sites.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
           </select></div></div>
         <div className="ctl"><Ic.cal /><div><label htmlFor="date">{es ? "Fecha de alunizaje" : "Landing date"}</label>
           <input id="date" type="date" value={startDate} onChange={(e) => e.target.value && update({ start: `${e.target.value}T${startTime}:00Z` })} /></div></div>
         <div className="ctl"><Ic.clock /><div><label htmlFor="time">{es ? "Hora (UTC)" : "Time (UTC)"}</label>
           <input id="time" type="time" value={startTime} onChange={(e) => e.target.value && update({ start: `${startDate}T${e.target.value}:00Z` })} /></div>
-          <button className="btn icon primary" onClick={() => setPlaying(!playing)} disabled={!result} aria-label={playing ? (es ? "Pausar" : "Pause") : (es ? "Reproducir" : "Play")}>{playing ? <Ic.pause /> : <Ic.play />}</button></div>
-        <details className="params">
-          <summary className="btn"><Ic.sliders />{es ? "Parámetros" : "Parameters"}</summary>
-          <div className="pop">
-            <label className="field">{es ? "Duración (días)" : "Duration (days)"}<input type="number" min={1} max={120} value={spec.duration_days} onChange={(e) => update({ duration_days: +e.target.value })} /></label>
-            <label className="field">{es ? "Mástil (m)" : "Mast (m)"}<input type="number" min={0} max={50} value={spec.mast_m} onChange={(e) => update({ mast_m: +e.target.value })} /></label>
-            <label className="field">{es ? "Autonomía de batería (h)" : "Battery autonomy (h)"}<input type="number" min={1} value={spec.autonomy_h ?? Math.round(spec.power.battery_wh / spec.power.load_w)} onChange={(e) => update({ autonomy_h: +e.target.value })} /></label>
-            <label className="field">{es ? "Corte máximo (h)" : "Max comm gap (h)"}<input type="number" min={1} value={spec.max_comm_gap_h} onChange={(e) => update({ max_comm_gap_h: +e.target.value })} /></label>
-            <label className="field">{es ? "Consumo (W)" : "Load (W)"}<input type="number" min={1} value={spec.power.load_w} onChange={(e) => update({ power: { ...spec.power, load_w: +e.target.value } })} /></label>
-            <label className="field">{es ? "Panel (m²)" : "Panel (m²)"}<input type="number" min={0.1} step={0.5} value={spec.panel.area_m2} onChange={(e) => update({ panel: { ...spec.panel, area_m2: +e.target.value } })} /></label>
-          </div>
-        </details>
-        <button className="btn primary" onClick={() => run(spec)} disabled={running}>{running ? (es ? "Calculando…" : "Computing…") : (es ? "Calcular" : "Compute")}</button>
+          <button className="btn icon ghost" onClick={() => setPlaying(!playing)} disabled={!result} aria-label={playing ? (es ? "Pausar" : "Pause") : (es ? "Reproducir la misión" : "Play the mission")}>{playing ? <Ic.pause /> : <Ic.play />}</button></div>
         <span className="spacer" />
-        <div className="seg" role="group" aria-label={es ? "Nivel de detalle" : "Detail level"}>
-          <button className={mode === "simple" ? "on" : ""} onClick={() => setMode("simple")}>{es ? "Simple" : "Simple"}</button>
-          <button className={mode === "tech" ? "on" : ""} onClick={() => setMode("tech")}>{es ? "Técnico" : "Technical"}</button>
+        <div className="tb-cluster">
+          <details className="params">
+            <summary className="btn icon" title={es ? "Parámetros de la misión" : "Mission parameters"} aria-label={es ? "Parámetros de la misión" : "Mission parameters"}><Ic.sliders /></summary>
+            <div className="pop">
+              <label className="field">{es ? "Duración (días)" : "Duration (days)"}<input type="number" min={1} max={120} value={spec.duration_days} onChange={(e) => update({ duration_days: +e.target.value })} /></label>
+              <label className="field">{es ? "Mástil (m)" : "Mast (m)"}<input type="number" min={0} max={50} value={spec.mast_m} onChange={(e) => update({ mast_m: +e.target.value })} /></label>
+              <label className="field">{es ? "Autonomía de batería (h)" : "Battery autonomy (h)"}<input type="number" min={1} value={spec.autonomy_h ?? Math.round(spec.power.battery_wh / spec.power.load_w)} onChange={(e) => update({ autonomy_h: +e.target.value })} /></label>
+              <label className="field">{es ? "Corte máximo (h)" : "Max comm gap (h)"}<input type="number" min={1} value={spec.max_comm_gap_h} onChange={(e) => update({ max_comm_gap_h: +e.target.value })} /></label>
+              <label className="field">{es ? "Consumo (W)" : "Load (W)"}<input type="number" min={1} value={spec.power.load_w} onChange={(e) => update({ power: { ...spec.power, load_w: +e.target.value } })} /></label>
+              <label className="field">{es ? "Panel (m²)" : "Panel (m²)"}<input type="number" min={0.1} step={0.5} value={spec.panel.area_m2} onChange={(e) => update({ panel: { ...spec.panel, area_m2: +e.target.value } })} /></label>
+            </div>
+          </details>
+          <button className="btn primary" onClick={() => run(spec, { keep: true })} disabled={running}>{running ? (es ? "Calculando…" : "Computing…") : (es ? "Calcular" : "Compute")}</button>
+          <button className="btn icon" onClick={share} title={copied ? (es ? "Enlace copiado" : "Link copied") : (es ? "Copiar enlace al escenario" : "Copy scenario link")} aria-label={es ? "Compartir" : "Share"}><Ic.link /></button>
         </div>
-        <div className="seg" role="group" aria-label={es ? "Idioma" : "Language"}>{["es", "en"].map((l) => <button key={l} className={lang === l ? "on" : ""} onClick={() => setLang(l)}>{l.toUpperCase()}</button>)}</div>
-        <button className="btn" onClick={share} title={es ? "Copiar enlace al escenario" : "Copy scenario link"}><Ic.link />{copied ? (es ? "Copiado" : "Copied") : (es ? "Compartir" : "Share")}</button>
-        <button className="btn" onClick={loadExample}><Ic.book />{es ? "Ver ejemplo" : "See example"}</button>
+        <div className="tb-sep tb-item">{modeSwitch}</div>
+        <div className="tb-sep tb-item"><div className="seg lang-seg" role="group" aria-label={es ? "Idioma" : "Language"}>{["es", "en"].map((l) => <button key={l} className={lang === l ? "on" : ""} onClick={() => setLang(l)}>{l.toUpperCase()}</button>)}</div></div>
+        <button className="btn example-btn" onClick={loadExample} aria-label={es ? "Ver ejemplo" : "See example"}><Ic.book /><span className="lbl">{es ? "Ver ejemplo" : "See example"}</span></button>
       </header>
 
       <nav className="sidebar" aria-label={es ? "Secciones" : "Sections"}>
         {NAV.map(([k, Icon, l1, l2]) => <button key={k} className={section === k ? "on" : ""} aria-current={section === k ? "page" : undefined} onClick={() => setSection(k)}><Icon />{es ? l1 : l2}</button>)}
         <div className="foot">
-          <div><span className={"dot " + (status ? "ok" : "bad")} /> {status ? (es ? "Motor en vivo" : "Engine live") : (es ? "Motor sin conexión" : "Engine offline")}</div>
-          {status && <div style={{ marginTop: 4 }}>{status.ephemeris.spice.available ? "SPICE" : "Horizons"} · DEM {status.dems.length}</div>}
-          {site && !site.verified && <div className="warn" style={{ marginTop: 4 }}>{es ? "Coordenadas sin reverificar" : "Coordinates not re-verified"}</div>}
+          {es ? "Planificar · Analizar · Explorar" : "Plan · Analyse · Explore"}
+          <div className="sb-status">
+            <div><span className={"dot " + (status ? "ok" : "bad")} /> {status ? (es ? "Motor en vivo" : "Engine live") : (es ? "Motor sin conexión" : "Engine offline")}</div>
+            {status && <div className="num">{status.ephemeris.spice.available ? "SPICE" : "Horizons"} · DEM {status.dems.length}</div>}
+            {site && !site.verified && <div className="warn">{es ? "Coordenadas sin reverificar" : "Coordinates not re-verified"}</div>}
+          </div>
         </div>
       </nav>
 
-      <main className="main" id="main">
+      <main className={"main" + (section === "overview" ? " overview" : "")} id="main">
         {error && <div className="errbox" role="alert"><b>{es ? "Algo falló:" : "Something failed:"}</b> {error} <button className="btn" style={{ marginLeft: 8 }} onClick={() => run(spec)}>{es ? "Reintentar" : "Retry"}</button></div>}
-        {precomputed && <div className="infobox">{es ? "El motor no respondió: estás viendo datos precalculados." : "The engine did not answer: showing precomputed data."}</div>}
 
         {showViewer && (
           <div className="workspace">
@@ -293,8 +311,12 @@ export default function App() {
             <StatusPanel r={result} hour={hour} lang={lang} open={openStep} running={running} />
           </div>
         )}
-        {section === "overview" && <TraceTable steps={steps} order={order} traceId={traceId} lang={lang} mode={mode} running={running} precomputed={precomputed}
-          onAnim={(k, c) => setAnim({ kind: k, caption: c })} />}
+        {section === "overview" && (
+          <div className="bottom-row">
+            <TraceTable steps={steps} order={order} traceId={traceId} lang={lang} mode={mode} running={running} precomputed={precomputed}
+              onAnim={(k, c) => setAnim({ kind: k, caption: c })} />
+            <CalcCard lang={lang} traceId={precomputed ? null : traceId} onSaved={(r) => { setSteps((p) => ({ ...p, [r.step.id]: r.step })); setOrder((p) => [...p, r.step.id]); }} />
+          </div>)}
         {section === "explorer" && result && <Inferences result={result} t={t} lang={lang} open={openStep} />}
 
         {section === "analysis" && (result ? (
@@ -319,6 +341,17 @@ export default function App() {
         {section === "scieng" && result && <Profiles result={result} t={t} lang={lang} runWith={runWith} open={openStep} />}
         {(section === "validation" || section === "sources") && <Validation status={status} result={result} t={t} lang={lang} />}
       </main>
+
+      <footer className="app-foot">
+        <div className="fb"><Logo /><b>LUMOX</b><span className="div" /><span>Lunar Mission Planner</span></div>
+        <div className="tag-line">{es ? "Ciencia precisa · Decisiones informadas" : "Precise science · Informed decisions"}</div>
+        <div className="ds">
+          <span className={"dot " + (status ? "ok" : "bad")} />
+          <span>{es ? "Datos" : "Data"}: NASA/JPL · LOLA · SPICE</span>
+          {precomputed && <span className="mute">· {es ? "precalculado, actualizando" : "precomputed, updating"}</span>}
+          <a href="https://github.com/anabelgrez/lumox/blob/v3-explorador/docs/FUENTES.md" target="_blank" rel="noreferrer" className="mute">{es ? "Fuentes" : "Sources"}</a>
+        </div>
+      </footer>
 
       {modals}
     </div>

@@ -53,8 +53,10 @@ export function LumoSvg({ state = "happy", size = 92 }) {
 
 const TOUR_KEY = "lumox.tour.v1";
 
-export default function Lumo({ result, t, lang, hour = 0, guide, setGuide, visible, setVisible, loadExample, running, onAction, tourReady }) {
+export default function Lumo({ result, t, lang, hour = 0, guide, setGuide, visible, setVisible, loadExample, running, onAction, tourReady, compact = false }) {
   const [step, setStep] = useState(0);
+  const [open, setOpen] = useState(!compact);
+  useEffect(() => setOpen(!compact), [compact]);
   const es = lang === "es";
   const steps = guideSteps(lang);
 
@@ -87,8 +89,8 @@ export default function Lumo({ result, t, lang, hour = 0, guide, setGuide, visib
   const say = running ? (es ? "Estoy calculando… cada paso aparece abajo, en la tabla." : "Computing… each step shows up in the table below.")
     : result ? nowPhrase(result, hour, lang) : (es ? "¡Hola! Soy Lumo." : "Hi! I'm Lumo.");
   return (
-    <div className="lumo" role="complementary" aria-label="Lumo">
-      <div className="bubble" aria-live="polite">
+    <div className={"lumo" + (open || guide ? "" : " compact")} role="complementary" aria-label="Lumo">
+      {(open || guide) && <div className="bubble" aria-live="polite">
         {guide ? (
           <>
             <div className="small mute">{es ? "Recorrido" : "Tour"} · {step + 1}/{steps.length}</div>
@@ -112,8 +114,8 @@ export default function Lumo({ result, t, lang, hour = 0, guide, setGuide, visib
             </div>
           </>
         )}
-      </div>
-      <button style={{ background: "none", border: 0, padding: 0 }} onClick={() => setVisible(false)} aria-label={t.lumoHide}><LumoSvg state={state} size={110} /></button>
+      </div>}
+      <button style={{ background: "none", border: 0, padding: 0 }} onClick={() => (compact ? setOpen(!open) : setVisible(false))} aria-label={compact ? (es ? "Hablar con Lumo" : "Talk to Lumo") : t.lumoHide} aria-expanded={open}><LumoSvg state={state} size={110} /></button>
     </div>
   );
 }

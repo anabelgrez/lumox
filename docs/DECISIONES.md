@@ -165,3 +165,15 @@ Ver `USO_DE_IA.md`. La aplicación en sí no usa IA.
 | "Tu fracción de disco es un invento" | Fórmula cerrada al lado, diferencia < 5e-3. |
 | "Sin DEM mentís" | Sin DEM hay cartel rojo en todos lados y paso MISSING DATA en la traza. |
 | "Las coordenadas de los sitios son dudosas" | Cuatro de cinco están marcadas *sin reverificar* en la UI y en la API. |
+
+## 19. Identidad visual "premium aerospace" (rama `v3-explorador`)
+
+**Elegimos:** reproducir la imagen de referencia de Lumox como guía permanente.
+- **Distribución:** barra lateral angosta (236 px), barra superior compacta (84 px) sin cajas, solo con divisores finos; visor protagonista; panel de estado a la derecha (332 px); fila inferior con la tabla de cálculos y la calculadora (272 px); pie de 52 px. En 1672 × 941 todo entra en una pantalla, igual que la referencia.
+- **Color:** tomado de los píxeles de la referencia, no a ojo. Fondo `#04080f`, paneles grafito y petróleo, un solo acento ámbar discreto (`#e3a24a`, la barra activa medida fue `#eeae53`), verde del veredicto `#5cc260`. El cian queda reservado para resultados científicos (la salida de la calculadora). El azul de la versión anterior dejó de ser acento: ahora solo identifica a la Tierra.
+- **Tipografía:** Inter para la interfaz y IBM Plex Mono para coordenadas, fechas, horas, valores y unidades. Pesos de 400 a 600, sin negritas exageradas. Las fórmulas se muestran legibles (θ, ρ, Σ, r⃗, û) con una tipografía matemática del sistema; el LaTeX completo sigue en la traza.
+- **Gráfico de energía:** su paleta (`#c4862f` generada, `#5a94da` consumo, `#34a06c` batería) pasó las cinco comprobaciones del validador de la skill `dataviz` contra el fondo `#0b131f` (banda de luminosidad, croma, separación para daltonismo, piso de visión normal y contraste).
+- **Calculadora de misión** integrada, como en la referencia, conectada a `/api/calc`.
+- **Lumo** en modo Técnico se ve chico; la burbuja se abre al tocarlo.
+
+**Lo que no copiamos:** los números de la imagen (algunos son físicamente imposibles, como el Sol a 12,4° en el polo sur) y su relieve fotorrealista. El nuestro es la malla real de LOLA. La vista de la referencia pasó a ser la predeterminada; el modo Simple sigue disponible.

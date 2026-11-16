@@ -19,7 +19,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from . import __version__, formulas
 from .energy import Panel, Power
@@ -28,6 +28,7 @@ from .horizon import dem_coverage, list_dems, terrain_patch
 from .scenario import LIMITS, ScenarioSpec, run_scenario
 from .sites import SITES
 from .trace import STORE, Trace
+from .timegrid import parse_utc
 
 app = FastAPI(title="Lumox v2 engine", version=__version__,
               description="Lunar landing-site viability with live calculation traces.")
@@ -66,6 +67,16 @@ class ScenarioIn(BaseModel):
     margins: bool = True
     max_delay_days: int = Field(30, ge=0, le=90)
     label: str = ""
+
+    @field_validator("start")
+    @classmethod
+    def _valid_start(cls, v: str) -> str:
+        # una fecha mal escrita es un error del pedido (422), no del motor (500)
+        try:
+            parse_utc(v)
+        except Exception:
+            raise ValueError(f"fecha de inicio inválida: '{v}' (formato esperado: 2027-01-24T00:00:00Z)")
+        return v
 
     def to_spec(self) -> ScenarioSpec:
         d = self.model_dump()

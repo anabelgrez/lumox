@@ -29,6 +29,10 @@ REQUIRED = ["naif0012.tls", "pck00011.tpc", "de440s.bsp", "moon_pa_de440_200625.
 FRAME = "MOON_ME"
 
 _loaded = False
+# CSPICE no se puede usar desde dos hilos a la vez (estado global en C): con escenarios
+# en paralelo (mapa de calor, perfiles) daba errores como UNPARSEDTIME o FILEREADFAILED.
+import threading
+_SPICE_LOCK = threading.RLock()
 
 
 def kernels_status() -> dict:
@@ -68,6 +72,11 @@ def _enu_matrix(lat_deg: float, lon_deg: float) -> np.ndarray:
 
 
 def topocentric(lat: float, lon: float, alt_m: float, times: np.ndarray, trace=None) -> Ephemeris:
+    with _SPICE_LOCK:
+        return _topocentric(lat, lon, alt_m, times, trace)
+
+
+def _topocentric(lat: float, lon: float, alt_m: float, times: np.ndarray, trace=None) -> Ephemeris:
     import spiceypy as sp
     _load()
     R_km = R_MOON.value / 1000.0
